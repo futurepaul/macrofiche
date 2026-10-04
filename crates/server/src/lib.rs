@@ -6,6 +6,7 @@
 
 pub mod api;
 pub mod config;
+pub mod smart;
 pub mod webhook;
 
 use std::collections::HashMap;

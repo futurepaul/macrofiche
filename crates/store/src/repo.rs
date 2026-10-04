@@ -274,7 +274,8 @@ impl RepoHandle {
         (self.meta.repo_id.clone(), c)
     }
 
-    fn touched(&self) {
+    /// Marks the repository written, for idle maintenance.
+    pub fn touched(&self) {
         let k = format!("{}/{}", self.meta.org, self.meta.repo_id);
         self.dirty.lock().expect("the dirty lock").insert(k, (self.meta.clone(), Instant::now()));
     }

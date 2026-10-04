@@ -216,6 +216,7 @@ name = "macrofiche"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "flate2",
  "http-body-util",
  "hyper",
  "hyper-util",

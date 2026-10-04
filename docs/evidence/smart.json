@@ -1,0 +1,27 @@
+{
+  "client": "git version 2.55.0",
+  "clone_ms": {
+    "max": 30.428,
+    "mean": 29.735,
+    "n": 5,
+    "p50": 29.676,
+    "p95": 30.428,
+    "p99": 30.428
+  },
+  "date": "2026-10-03",
+  "fetch_nothing_ms": 7.192,
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe; release build",
+  "push_one_commit_ms": {
+    "max": 16.005,
+    "mean": 14.836,
+    "n": 50,
+    "p50": 14.722,
+    "p95": 15.885,
+    "p99": 16.005
+  },
+  "repository": {
+    "commits": 100,
+    "files": 1000
+  },
+  "scenario": "smart"
+}

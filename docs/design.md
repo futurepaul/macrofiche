@@ -69,7 +69,7 @@ client ── HTTP/1.1 (TLS optional) ──▶ macrofiche
 | `crates/pack` | `macrofiche-pack`: the NDJSON commit-pack parser as a state machine fed bytes as they arrive, one line buffered at a time, chunks decoded and handed to a sink | pure, host-tested |
 | `crates/git` | `macrofiche-git`: the engine. The jail (Landlock, seccomp, rlimits), process spawning with deadlines, each plumbing command as a typed call, the `cat-file` pool, and errors classified from exit statuses and stderr | parsers and the jail plan pure; the rest needs the engine |
 | `crates/store` | `macrofiche-store`: repositories on disk, the registry, the write lock, commit packs applied, merges, restores, branches, listings, the last-commit index, boot recovery, maintenance | the index format and merge rules pure; the rest needs the engine |
-| `crates/server` | `macrofiche`: the binary. Config, the HTTP server and every route, streamed bodies, webhook delivery, (later) smart HTTP | config and webhook signing pure |
+| `crates/server` | `macrofiche`: the binary. Config, the HTTP server and every route, streamed bodies, webhook delivery, smart HTTP | config, webhook signing, smart-HTTP paths pure |
 | `crates/testkit` | `macrofiche-testkit`: a blocking HTTP/1.1 client and server for tests, key generation and token minting, spawning the real binary | test support |
 | `crates/bench` | `macrofiche-bench`: the evidence driver; each scenario's numbers as JSON into `docs/evidence/` | driver |
 | `crates/xtask` | `cargo xtask engine`: downloads git 2.55.0, checks its SHA-256, builds and installs it into the prefix | tooling |
@@ -392,6 +392,41 @@ delivery is at least once while the process lives, best effort across a
 restart (the cell's poll catches a lost one). A repository's registered
 secrets live in its `macrofiche/webhooks.json`, mode 0600.
 
+## Smart HTTP
+
+`git clone`, `fetch` and `push` at `<base>/<repo>.git`, as the service
+serves them at `https://t:<JWT>@<org>.code.storage/<repo>.git`
+(contract section 11). macrofiche serves git's own protocol as git's
+`http-backend` does: `GET <repo>.git/info/refs?service=…` runs
+`upload-pack` or `receive-pack --stateless-rpc --http-backend-info-refs`
+(the `# service=` header but under protocol v2), and `POST
+<repo>.git/git-upload-pack` and `git-receive-pack` run the same with
+`--stateless-rpc`, each jailed like every git. `Git-Protocol` is passed
+through as `GIT_PROTOCOL`, so fetches speak v2; a gzipped request (git's
+client gzips its small ones) is read whole, at most 64 MiB, and
+inflated, at most 256 MiB.
+
+- **Auth** is the REST API's: the JWT as the Basic password (any user
+  name) or as a bearer; `git:read` to fetch, `git:write` to push; the
+  `repo` claim must name the path's repository (else 404). Without
+  credentials the answer is 401 with `WWW-Authenticate: Basic`, so git
+  sends the ones its URL holds. Dumb HTTP is refused.
+- **A push is one more write** (library.md, Risks: two write paths). Its
+  body is spooled first (at most 2 GiB, `receive.maxInputSize` too), so
+  a slow client holds nothing; then `receive-pack` runs under the
+  repository's write lock, so a push and a commit pack never interleave.
+  receive-pack's own ref transaction is the compare-and-swap of each
+  command's old value (a stale one is `ng … failed to update ref`). The
+  refs it moved, created or deleted under `refs/heads/` get their
+  last-commit records before the answer, and their webhooks after it.
+  `transfer.hideRefs` hides `refs/macrofiche/` and the ephemeral
+  namespace from both directions, so a push cannot write them; objects
+  are checked (`receive.fsckObjects`) in git's quarantine; no hook runs
+  (an empty `core.hooksPath`, and Landlock grants no execute in the
+  repository).
+- **A clone** streams `upload-pack`'s pack to the client as it is made;
+  a client gone ends the process group.
+
 ## Config and command line
 
 `macrofiche serve --config <file>` reads one JSON file, checked at start
@@ -475,10 +510,10 @@ Each phase ends with its tests green, `cargo clippy --workspace
    measured; merges and restore; the webhook's signature and retries;
    the fake's own tests where they describe the contract), and
    `docs/evidence/*.json`. *Exit:* the evidence below.
-5. **P5, smart HTTP** (if time remains): `git clone`, `fetch` and `push`
-   with the same JWT, through `upload-pack` and `receive-pack
-   --stateless-rpc`, keeping the CAS, the index and the webhook. *Exit:*
-   the real git client clones, pushes, and is refused a stale push.
+5. **P5, smart HTTP**: `git clone`, `fetch` and `push` with the same
+   JWT, through `upload-pack` and `receive-pack --stateless-rpc`, keeping
+   the CAS, the index and the webhook. *Exit:* the real git client
+   clones, pushes, and is refused a stale push.
 
 ## Evidence
 
@@ -595,9 +630,47 @@ objects (4.8 MB) became one pack of 110 KiB in 300 ms (geometric repack,
 loose objects, pack-refs, commit-graph, and the day's gc), under the
 repository's write lock; `GET commits` went from 2.67 to 1.42 ms.
 
+### P5, smart HTTP (`docs/evidence/smart.json`)
+
+The real git client (the system's git 2.55.0, built with curl; the
+pinned server-side build has none) against the release binary, in
+`crates/server/tests/smart.rs` (3 tests) and the driver:
+
+- it clones what the REST API wrote (protocol v2 and v0), pushes a
+  commit back, and the REST API reads the push: the branch's head, the
+  new file, and git's last commits (the pushed commit for what it
+  changed, the old commit for the rest); the push's webhook names its
+  move; a REST commit after it is fetched; a branch made and deleted by
+  push is announced both times;
+- it is refused a push on a stale lease, a non-fast-forward without
+  force, and a push to `refs/macrofiche/`; and by hand (the protocol
+  written out, since the client checks its lease before it sends), a
+  command whose old value is stale is `ng` with nothing moved, and the
+  same command from the right old value lands;
+- auth: no credentials is 401 with a Basic challenge, a read token
+  clones and cannot push (403), another repository's token finds nothing
+  (404), dumb HTTP is 403;
+- a clone of 1,000 files and 100 commits takes 30 ms (p50 of 5), a fetch
+  of nothing 7 ms, a push of one commit 14.7 ms (p50 of 50, p95 15.9),
+  each a whole run of the client.
+
+With P5 the workspace has 96 tests (two more pure, three against the
+real client).
+
 ## Debt
 
 *This list is macrofiche's ledger: each item stays here until it is paid.*
+
+- Smart HTTP serves no Git LFS batch API (question 5: not worth it
+  until computers' agents push large files with `git lfs`), no
+  `git-upload-archive`, and `receive-pack` speaks protocol v0 (git's
+  own does not do v2 for pushes).
+- receive-pack's answer (its report and progress) is held whole, at most
+  16 MiB, so its records and webhooks can follow it; a push of many refs
+  answers only when every record is written.
+- A push deleting a branch is announced with `after` all zeros; fragment
+  never deletes a branch, and the cell reads such a delivery as a move to
+  nothing.
 
 - `GET file` honors `If-None-Match` (304) but not `Range`, `If-Range`,
   `If-Match` or the date conditionals the service documents, and sends

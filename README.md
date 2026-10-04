@@ -4,10 +4,12 @@ A self-hosted git store that answers code.storage's API: the files half
 of a self-hosted fragment (fragment's `docs/self-host.md`, seam 5), as
 sandcastle is its computers half. What it answers is
 [docs/contract.md](docs/contract.md): thirteen REST routes and a signed
-push webhook, as fragment's cell and CLI call them. What it is built on
-is [docs/library.md](docs/library.md): git itself, at a pinned version,
-driven through its plumbing as jailed processes, the way GitLab's Gitaly
-drives git. How the two meet is [docs/design.md](docs/design.md).
+push webhook, as fragment's cell and CLI call them; it also serves git's
+smart HTTP (`git clone`, `fetch`, `push`) with the same tokens. What it
+is built on is [docs/library.md](docs/library.md): git itself, at a
+pinned version, driven through its plumbing as jailed processes, the way
+GitLab's Gitaly drives git. How the two meet is
+[docs/design.md](docs/design.md).
 
 ## Status
 
@@ -23,10 +25,10 @@ process (docs/design.md; evidence in `docs/evidence/`, measured
 | a 100 MiB blob in and out | 3.7 s in, 47 ms out; macrofiche's heap at most 51 MiB, git's 29 MiB |
 | sixteen writers racing on one branch | 320 of 320 commits, linear, 127 commits/s, 2,601 refused 409s applying nothing |
 | twenty rounds of kill -9 mid-write and a restart | `fsck --strict` clean every round, 982 acknowledged commits, none lost |
+| the real git client over smart HTTP, with the same JWT | a 1,000-file clone in 30 ms, a push in 15 ms; a stale push refused by the CAS |
 
-What is not done: smart HTTP (`git clone`, `fetch`, `push`; phase 5), a
-node on another filesystem or kernel, and the debt in docs/design.md,
-Debt.
+What is not done: a node on another filesystem or kernel, a run in
+production, and the debt in docs/design.md, Debt.
 
 ## Layout
 
@@ -37,7 +39,7 @@ Debt.
 | `crates/pack` | `macrofiche-pack`: the streaming NDJSON commit-pack parser (pure) |
 | `crates/git` | `macrofiche-git`: git 2.55.0 as jailed processes: plumbing calls, the `cat-file` pool, classified errors |
 | `crates/store` | `macrofiche-store`: repositories on disk, writes under compare-and-swap, merges, listings, the last-commit index, recovery, maintenance |
-| `crates/server` | `macrofiche`: the binary: config, the HTTP API, webhooks |
+| `crates/server` | `macrofiche`: the binary: config, the HTTP API, smart HTTP, webhooks |
 | `crates/testkit` | `macrofiche-testkit`: a blocking HTTP client and server, tokens, the binary spawned for tests |
 | `crates/bench` | `macrofiche-bench`: the evidence driver |
 | `crates/xtask` | `cargo xtask engine`: builds git 2.55.0 into the prefix |

@@ -460,6 +460,66 @@ fn maintenance(bin: &std::path::Path) -> Value {
     json!({ "scenario": "maintenance", "commits": 300, "objects_before": before, "objects_after": after, "maintained": done.map(|v| v["repo"].clone()), "fsck_failures": bad, "commits_route_ms_before": stats(read_before), "commits_route_ms_after": stats(read_after) })
 }
 
+/// The system's git, as a client, with nothing of the user's config.
+fn client(dir: &std::path::Path, home: &std::path::Path, args: &[&str]) -> std::process::Output {
+    let o = std::process::Command::new("/usr/bin/git")
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_AUTHOR_NAME", "agent")
+        .env("GIT_AUTHOR_EMAIL", "agent@computer.fragment")
+        .env("GIT_COMMITTER_NAME", "agent")
+        .env("GIT_COMMITTER_EMAIL", "agent@computer.fragment")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .expect("the git client runs");
+    assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    o
+}
+
+/// Smart HTTP with the real git client: a clone of a repository of 1,000
+/// files and 100 commits, a fetch of nothing, and pushes of one commit.
+fn smart(bin: &std::path::Path, n: usize) -> Value {
+    let fx = Fx::start(bin, "bench-smart", json!({}));
+    let repo = "smart--bench";
+    fx.create(repo);
+    let files: Vec<(String, Vec<u8>)> = (0..1000).map(|i| (format!("d{}/f{i:04}.txt", i % 20), format!("{i} {}", "y".repeat(500)).into_bytes())).collect();
+    let changes: Vec<Change<'_>> = files.iter().map(|(p, b)| up(p, b)).collect();
+    let mut head = committed(&fx.pack(repo, &commit_pack("main", None, "seed", AUTHOR, &changes)).json()).unwrap();
+    for i in 0..99 {
+        head = committed(&fx.pack(repo, &commit_pack("main", Some(&head), "edit", AUTHOR, &[up(&format!("d{}/f{:04}.txt", i % 20, i * 7 % 1000), format!("{i}").as_bytes())])).json()).unwrap();
+    }
+    let token = fx.key.token(ORG, "editor:ab", repo, &["git:read", "git:write"], 900);
+    let url = format!("http://t:{token}@{}/{repo}.git", fx.m.url.strip_prefix("http://").unwrap());
+    let home = macrofiche_testkit::scratch("bench-smart-home");
+    let mut clones = Vec::new();
+    for k in 0..5 {
+        let (_, ms) = timed(|| client(&home, &home, &["clone", "--quiet", &url, &format!("c{k}")]));
+        clones.push(ms);
+    }
+    let w = home.join("c0");
+    let (_, fetch_ms) = timed(|| client(&w, &home, &["fetch", "--quiet", "origin"]));
+    let mut pushes = Vec::new();
+    for i in 0..n.min(50) {
+        std::fs::write(w.join("pushed.txt"), format!("{i}")).unwrap();
+        client(&w, &home, &["commit", "--quiet", "-am", "push", "--allow-empty"]);
+        if i == 0 {
+            client(&w, &home, &["add", "pushed.txt"]);
+            client(&w, &home, &["commit", "--quiet", "--amend", "-m", "push"]);
+        }
+        let (_, ms) = timed(|| client(&w, &home, &["push", "--quiet", "origin", "main"]));
+        pushes.push(ms);
+    }
+    let head_after = fx.head(repo, "main").unwrap();
+    let local = String::from_utf8(client(&w, &home, &["rev-parse", "HEAD"]).stdout).unwrap().trim().to_string();
+    assert_eq!(head_after, local, "the last push is main");
+    let version = String::from_utf8(client(&home, &home, &["--version"]).stdout).unwrap().trim().to_string();
+    json!({ "scenario": "smart", "client": version, "repository": { "files": 1000, "commits": 100 }, "clone_ms": stats(clones), "fetch_nothing_ms": (fetch_ms * 1000.0).round() / 1000.0, "push_one_commit_ms": stats(pushes) })
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |k: &str| args.iter().position(|a| a == k).and_then(|i| args.get(i + 1)).cloned();
@@ -468,7 +528,7 @@ fn main() {
     let n: usize = flag("--n").and_then(|v| v.parse().ok()).unwrap_or(200);
     let write = args.iter().any(|a| a == "--write");
     let which = args.first().map(String::as_str).unwrap_or("all");
-    let scenarios: Vec<&str> = if which == "all" { vec!["latency", "blob", "race", "crash", "maintenance"] } else { vec![which] };
+    let scenarios: Vec<&str> = if which == "all" { vec!["latency", "blob", "race", "crash", "maintenance", "smart"] } else { vec![which] };
     for s in scenarios {
         let mut v = match s {
             "latency" => latency(&bin, n),
@@ -476,6 +536,7 @@ fn main() {
             "race" => race(&bin),
             "crash" => crash(&bin, flag("--rounds").and_then(|v| v.parse().ok()).unwrap_or(20)),
             "maintenance" => maintenance(&bin),
+            "smart" => smart(&bin, n),
             other => panic!("no scenario {other}"),
         };
         v["date"] = "2026-10-03".into();

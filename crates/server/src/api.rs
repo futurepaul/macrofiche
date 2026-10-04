@@ -126,6 +126,11 @@ async fn route(app: &App, req: Request<Incoming>) -> Result<Resp, Problem> {
     if path == "/healthz" {
         return Ok(json(200, &json!({ "ok": true })));
     }
+    if !path.starts_with("/api/") {
+        if let Some((name, op)) = crate::smart::parse_path(&path) {
+            return crate::smart::serve(app, req, name, op).await;
+        }
+    }
     let query = Query::parse(req.uri().query()).map_err(|e| bad("invalid_query", e.to_string()))?;
     if path == "/api/repos" {
         let c = claims(app, &req)?;
@@ -354,8 +359,12 @@ async fn files_metadata(h: &RepoHandle, q: &Query) -> Result<Resp, Problem> {
     Ok(json(200, &body))
 }
 
-/// A body fed from a channel: a streamed file.
+/// A body fed from a channel: a streamed file, a clone's pack.
 struct ChannelBody(tokio::sync::mpsc::Receiver<Result<Bytes, std::io::Error>>);
+
+pub fn channel_body(rx: tokio::sync::mpsc::Receiver<Result<Bytes, std::io::Error>>) -> Body {
+    ChannelBody(rx).boxed()
+}
 
 impl hyper::body::Body for ChannelBody {
     type Data = Bytes;
@@ -510,23 +519,33 @@ impl Drop for Spool {
 }
 
 fn announce(app: &App, h: &RepoHandle, moved: Option<Moved>) {
-    let Some(m) = moved else { return };
+    announce_moves(app, h, moved.into_iter().collect());
+}
+
+/// Queues the push webhook of each move: one delivery per moved branch to
+/// each of the org's hooks and the repository's own (contract section 6).
+pub fn announce_moves(app: &App, h: &RepoHandle, moved: Vec<Moved>) {
+    if moved.is_empty() {
+        return;
+    }
     let repo_hooks = read_repo_hooks(h);
     let org_hooks = app.org_hooks.get(&h.meta.org).map(Vec::as_slice).unwrap_or(&[]);
     if org_hooks.is_empty() && repo_hooks.is_empty() {
         return;
     }
-    let body = webhook::body(&webhook::Push {
-        org: &h.meta.org,
-        repo_id: &h.meta.repo_id,
-        repo_name: &h.meta.repo_name,
-        ref_name: &m.ref_name,
-        before: hex(m.before),
-        after: m.after.to_string(),
-        pushed_at: rfc3339(now_s()),
-    });
-    for d in webhook::deliveries(org_hooks, &repo_hooks, &body) {
-        app.hooks.send(d);
+    for m in moved {
+        let body = webhook::body(&webhook::Push {
+            org: &h.meta.org,
+            repo_id: &h.meta.repo_id,
+            repo_name: &h.meta.repo_name,
+            ref_name: &m.ref_name,
+            before: hex(m.before),
+            after: m.after.to_string(),
+            pushed_at: rfc3339(now_s()),
+        });
+        for d in webhook::deliveries(org_hooks, &repo_hooks, &body) {
+            app.hooks.send(d);
+        }
     }
 }
 

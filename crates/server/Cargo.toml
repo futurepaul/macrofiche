@@ -28,6 +28,8 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 libc.workspace = true
+# git's client gzips its small smart-HTTP requests.
+flate2.workspace = true
 
 [dev-dependencies]
 macrofiche-testkit = { path = "../testkit" }
