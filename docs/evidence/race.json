@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-03",
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe; release build",
+  "one_branch": {
+    "attempts": 2921,
+    "commits_each": 20,
+    "commits_per_s": 127.0,
+    "files_after": 321,
+    "landed": 320,
+    "pack_ms": {
+      "max": 19.784,
+      "mean": 7.729,
+      "n": 2921,
+      "p50": 7.712,
+      "p95": 8.266,
+      "p99": 8.616
+    },
+    "refused_409": 2601,
+    "secs": 2.524,
+    "writers": 16
+  },
+  "own_repositories": {
+    "commits": 320,
+    "commits_per_s": 784.0,
+    "secs": 0.408,
+    "writers": 16
+  },
+  "scenario": "race"
+}

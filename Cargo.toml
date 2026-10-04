@@ -4,7 +4,7 @@
 # (docs/design.md, Dependencies).
 [workspace]
 resolver = "2"
-members = ["crates/auth", "crates/contract", "crates/git", "crates/pack", "crates/server", "crates/store", "crates/testkit", "crates/xtask"]
+members = ["crates/auth", "crates/bench", "crates/contract", "crates/git", "crates/pack", "crates/server", "crates/store", "crates/testkit", "crates/xtask"]
 # git's own Rust crate is unpacked under target/engine by `cargo xtask
 # engine`; the library spike is a workspace of its own.
 exclude = ["target", "spikes"]

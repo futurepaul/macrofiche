@@ -1,0 +1,135 @@
+{
+  "client": "a fresh TCP connection per request (macrofiche-testkit)",
+  "date": "2026-10-03",
+  "loopback": true,
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe; release build",
+  "macrofiche_after_kib": {
+    "rss_anon": 10308,
+    "vm_hwm": 16120,
+    "vm_rss": 16120
+  },
+  "ms": {
+    "GET /api/repos": {
+      "max": 0.222,
+      "mean": 0.17,
+      "n": 50,
+      "p50": 0.17,
+      "p95": 0.22,
+      "p99": 0.222
+    },
+    "GET branch": {
+      "max": 0.235,
+      "mean": 0.135,
+      "n": 200,
+      "p50": 0.132,
+      "p95": 0.165,
+      "p99": 0.206
+    },
+    "GET commits, 30": {
+      "max": 3.135,
+      "mean": 2.144,
+      "n": 200,
+      "p50": 2.1,
+      "p95": 2.962,
+      "p99": 3.058
+    },
+    "GET file, 1 KiB": {
+      "max": 0.576,
+      "mean": 0.14,
+      "n": 200,
+      "p50": 0.135,
+      "p95": 0.167,
+      "p99": 0.185
+    },
+    "GET files/metadata, 106 files, a new head": {
+      "max": 4.67,
+      "mean": 3.5,
+      "n": 200,
+      "p50": 3.481,
+      "p95": 4.477,
+      "p99": 4.643
+    },
+    "GET files/metadata, 106 files, again": {
+      "max": 0.628,
+      "mean": 0.413,
+      "n": 200,
+      "p50": 0.408,
+      "p95": 0.495,
+      "p99": 0.593
+    },
+    "GET merge/preview": {
+      "max": 14.586,
+      "mean": 9.6,
+      "n": 200,
+      "p50": 9.722,
+      "p95": 13.94,
+      "p99": 14.509
+    },
+    "HEAD file": {
+      "max": 0.196,
+      "mean": 0.108,
+      "n": 200,
+      "p50": 0.104,
+      "p95": 0.133,
+      "p99": 0.145
+    },
+    "POST /api/repos": {
+      "max": 6.929,
+      "mean": 3.645,
+      "n": 50,
+      "p50": 3.636,
+      "p95": 4.308,
+      "p99": 6.929
+    },
+    "POST branches/create": {
+      "max": 2.645,
+      "mean": 2.183,
+      "n": 200,
+      "p50": 2.177,
+      "p95": 2.405,
+      "p99": 2.56
+    },
+    "POST commit-pack, 1 file": {
+      "max": 11.261,
+      "mean": 7.304,
+      "n": 200,
+      "p50": 7.274,
+      "p95": 7.825,
+      "p99": 8.305
+    },
+    "POST commit-pack, 5 files": {
+      "max": 9.732,
+      "mean": 8.671,
+      "n": 200,
+      "p50": 8.683,
+      "p95": 9.315,
+      "p99": 9.574
+    },
+    "POST merge, fast-forward": {
+      "max": 3.258,
+      "mean": 3.258,
+      "n": 1,
+      "p50": 3.258,
+      "p95": 3.258,
+      "p99": 3.258
+    },
+    "POST merge, three-way": {
+      "max": 18.485,
+      "mean": 13.387,
+      "n": 199,
+      "p50": 13.422,
+      "p95": 17.877,
+      "p99": 18.402
+    },
+    "POST restore-commit": {
+      "max": 11.273,
+      "mean": 7.932,
+      "n": 399,
+      "p50": 7.921,
+      "p95": 10.279,
+      "p99": 10.657
+    }
+  },
+  "samples_per_route": 200,
+  "scenario": "latency"
+}

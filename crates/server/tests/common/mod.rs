@@ -2,7 +2,7 @@
 //! directory, an org key, and calls shaped as fragment's clients shape
 //! them (`cell/src/cs.rs`, `cli/src/codestorage.rs`, and the encoder of
 //! `fragment_core::codestorage::commit_pack`, ported here).
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 use std::path::{Path, PathBuf};
 
@@ -13,7 +13,7 @@ pub const ORG: &str = "fragment-dev";
 /// The cell's own tokens live 300 s; storage tokens 900 s.
 pub const TTL: i64 = 300;
 /// Decoded bytes per `blob_chunk`, as fragment's encoder splits them.
-pub const CHUNK_MAX: usize = 4 * 1024 * 1024;
+pub const CHUNK_MAX: usize = macrofiche_testkit::fragment::CHUNK_MAX;
 
 pub fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_macrofiche"))
@@ -232,54 +232,4 @@ pub fn fsck_all(state: &Path) -> Vec<(PathBuf, bool, String)> {
     out
 }
 
-/// Percent-encodes every byte outside `[A-Za-z0-9-_.]`, as the CLI does.
-pub fn enc(s: &str) -> String {
-    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
-}
-
-pub enum Change<'a> {
-    Upsert { path: &'a str, bytes: &'a [u8] },
-    Delete { path: &'a str },
-}
-
-pub fn up<'a>(path: &'a str, bytes: &'a [u8]) -> Change<'a> {
-    Change::Upsert { path, bytes }
-}
-
-/// `fragment_core::codestorage::commit_pack`, ported: metadata first,
-/// each upsert's bytes as base64 chunks of at most 4 MiB decoded, the last
-/// with `eof`, a delete naming an id but streaming nothing.
-pub fn commit_pack(branch: &str, expected: Option<&str>, message: &str, author: (&str, &str), changes: &[Change<'_>]) -> Vec<u8> {
-    let mut files = Vec::new();
-    let mut chunks = String::new();
-    for (i, c) in changes.iter().enumerate() {
-        let id = format!("c{i}");
-        match c {
-            Change::Upsert { path, bytes } => {
-                files.push(json!({ "path": path, "operation": "upsert", "content_id": id, "mode": "100644" }));
-                let pieces: Vec<&[u8]> = bytes.chunks(CHUNK_MAX).collect();
-                if pieces.is_empty() {
-                    chunks.push_str(&format!("{}\n", json!({ "blob_chunk": { "content_id": id, "data": "", "eof": true } })));
-                }
-                for (j, p) in pieces.iter().enumerate() {
-                    chunks.push_str(&format!("{}\n", json!({ "blob_chunk": { "content_id": id, "data": macrofiche_testkit::b64(p), "eof": j + 1 == pieces.len() } })));
-                }
-            }
-            Change::Delete { path } => files.push(json!({ "path": path, "operation": "delete", "content_id": id })),
-        }
-    }
-    let mut meta = json!({ "target_branch": branch, "commit_message": message, "author": { "name": author.0, "email": author.1 }, "files": files });
-    if let Some(sha) = expected {
-        meta["expected_target_sha"] = sha.into();
-    }
-    format!("{}\n{chunks}", json!({ "metadata": meta })).into_bytes()
-}
-
-/// `fragment_core::codestorage::committed`: the new head of a 2xx answer.
-pub fn committed(v: &Value) -> Option<String> {
-    (v["result"]["success"] == true).then(|| v["result"]["new_sha"].as_str().map(str::to_string)).flatten().filter(|s| is_sha(s))
-}
-
-pub fn is_sha(s: &str) -> bool {
-    s.len() == 40 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
+pub use macrofiche_testkit::fragment::{commit_pack, committed, enc, is_sha, up, Change};

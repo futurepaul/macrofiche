@@ -1,0 +1,21 @@
+{
+  "blob_mib": 100,
+  "bytes_checked": "SHA-256 of the bytes out equals the bytes in; x-blob-sha is git's id",
+  "date": "2026-10-03",
+  "in": {
+    "git_rss_anon_peak_mib": 29.3,
+    "macrofiche_rss_anon_peak_mib": 50.6,
+    "mib_per_s": 27.0,
+    "ms": 3736.0
+  },
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe; release build",
+  "macrofiche_vm_hwm_mib": 55.1,
+  "out": {
+    "git_rss_anon_peak_mib": 0.3,
+    "macrofiche_rss_anon_peak_mib": 29.3,
+    "mib_per_s": 2149.0,
+    "ms": 47.0
+  },
+  "pack_body_bytes": 139811919,
+  "scenario": "blob"
+}

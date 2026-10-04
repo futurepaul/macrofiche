@@ -1,0 +1,51 @@
+{
+  "commits": 300,
+  "commits_route_ms_after": {
+    "max": 1.855,
+    "mean": 1.451,
+    "n": 20,
+    "p50": 1.415,
+    "p95": 1.538,
+    "p99": 1.855
+  },
+  "commits_route_ms_before": {
+    "max": 2.886,
+    "mean": 2.67,
+    "n": 20,
+    "p50": 2.67,
+    "p95": 2.772,
+    "p99": 2.886
+  },
+  "date": "2026-10-03",
+  "fsck_failures": 0,
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe; release build",
+  "maintained": {
+    "detail": "",
+    "gc": true,
+    "ms": 300,
+    "ok": true,
+    "org": "fragment-dev",
+    "repo_id": "6e4f302c65ba05fe15996abe740f37b2"
+  },
+  "objects_after": {
+    "count": 0,
+    "garbage": 0,
+    "in-pack": 1200,
+    "packs": 1,
+    "prune-packable": 0,
+    "size": 0,
+    "size-garbage": 0,
+    "size-pack": 110
+  },
+  "objects_before": {
+    "count": 1200,
+    "garbage": 0,
+    "in-pack": 0,
+    "packs": 0,
+    "prune-packable": 0,
+    "size": 4800,
+    "size-garbage": 0,
+    "size-pack": 0
+  },
+  "scenario": "maintenance"
+}

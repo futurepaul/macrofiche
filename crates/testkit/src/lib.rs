@@ -482,3 +482,160 @@ pub fn sample_memory(pid: u32, stop: Arc<std::sync::atomic::AtomicBool>) -> std:
         (own, child)
     })
 }
+
+/// What fragment's clients send, ported from `fragment_core::codestorage`
+/// so the suite and the evidence driver shape requests as fragment does.
+pub mod fragment {
+    use serde_json::{json, Value};
+
+    /// Decoded bytes per `blob_chunk`, as fragment's encoder splits them.
+    pub const CHUNK_MAX: usize = 4 * 1024 * 1024;
+
+    /// Percent-encodes every byte outside `[A-Za-z0-9-_.]`, as the CLI does.
+    pub fn enc(s: &str) -> String {
+        s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+    }
+
+    pub enum Change<'a> {
+        Upsert { path: &'a str, bytes: &'a [u8] },
+        Delete { path: &'a str },
+    }
+
+    pub fn up<'a>(path: &'a str, bytes: &'a [u8]) -> Change<'a> {
+        Change::Upsert { path, bytes }
+    }
+
+    /// `fragment_core::codestorage::commit_pack`, ported: metadata first,
+    /// each upsert's bytes as base64 chunks of at most 4 MiB decoded, the last
+    /// with `eof`, a delete naming an id but streaming nothing.
+    pub fn commit_pack(branch: &str, expected: Option<&str>, message: &str, author: (&str, &str), changes: &[Change<'_>]) -> Vec<u8> {
+        let mut files = Vec::new();
+        let mut chunks = String::new();
+        for (i, c) in changes.iter().enumerate() {
+            let id = format!("c{i}");
+            match c {
+                Change::Upsert { path, bytes } => {
+                    files.push(json!({ "path": path, "operation": "upsert", "content_id": id, "mode": "100644" }));
+                    let pieces: Vec<&[u8]> = bytes.chunks(CHUNK_MAX).collect();
+                    if pieces.is_empty() {
+                        chunks.push_str(&format!("{}\n", json!({ "blob_chunk": { "content_id": id, "data": "", "eof": true } })));
+                    }
+                    for (j, p) in pieces.iter().enumerate() {
+                        chunks.push_str(&format!("{}\n", json!({ "blob_chunk": { "content_id": id, "data": crate::b64(p), "eof": j + 1 == pieces.len() } })));
+                    }
+                }
+                Change::Delete { path } => files.push(json!({ "path": path, "operation": "delete", "content_id": id })),
+            }
+        }
+        let mut meta = json!({ "target_branch": branch, "commit_message": message, "author": { "name": author.0, "email": author.1 }, "files": files });
+        if let Some(sha) = expected {
+            meta["expected_target_sha"] = sha.into();
+        }
+        format!("{}\n{chunks}", json!({ "metadata": meta })).into_bytes()
+    }
+
+    /// `fragment_core::codestorage::committed`: the new head of a 2xx answer.
+    pub fn committed(v: &Value) -> Option<String> {
+        (v["result"]["success"] == true).then(|| v["result"]["new_sha"].as_str().map(str::to_string)).flatten().filter(|s| is_sha(s))
+    }
+
+    pub fn is_sha(s: &str) -> bool {
+        s.len() == 40 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }
+
+    /// A commit pack of one blob of `len` pseudo-random bytes, written as it
+    /// is read: never whole in the client's memory either. Its SHA-256 and
+    /// git blob id are computed as it goes (`finish`, once it is read).
+    pub struct BigPack {
+        head: Vec<u8>,
+        pending: Vec<u8>,
+        at: usize,
+        left: u64,
+        x: u64,
+        sha256: ring::digest::Context,
+        sha1: ring::digest::Context,
+    }
+
+    fn chunk_line(data: &[u8], eof: bool) -> Vec<u8> {
+        format!("{{\"blob_chunk\":{{\"content_id\":\"c0\",\"data\":\"{}\",\"eof\":{eof}}}}}\n", crate::b64(data)).into_bytes()
+    }
+
+    impl BigPack {
+        pub fn new(expected: Option<&str>, path: &str, len: u64) -> BigPack {
+            let mut meta = serde_json::json!({"metadata": {"target_branch": "main", "commit_message": "a big blob", "author": {"name": "fragment/1a2b3c4d", "email": "1a2b3c4d@users.fragment"}, "files": [{"path": path, "operation": "upsert", "content_id": "c0", "mode": "100644"}]}});
+            if let Some(e) = expected {
+                meta["metadata"]["expected_target_sha"] = e.into();
+            }
+            let mut sha1 = ring::digest::Context::new(&ring::digest::SHA1_FOR_LEGACY_USE_ONLY);
+            sha1.update(format!("blob {len}\0").as_bytes());
+            BigPack { head: format!("{meta}\n").into_bytes(), pending: Vec::new(), at: 0, left: len, x: 0x9e37_79b9_7f4a_7c15, sha256: ring::digest::Context::new(&ring::digest::SHA256), sha1 }
+        }
+
+        /// The body's length, known before it is written.
+        pub fn body_len(&self) -> u64 {
+            let line = |n: u64, eof: bool| chunk_line(b"", eof).len() as u64 + 4 * n.div_ceil(3);
+            let full = self.left / CHUNK_MAX as u64;
+            let rest = self.left % CHUNK_MAX as u64;
+            let mut total = self.head.len() as u64;
+            for i in 0..full {
+                total += line(CHUNK_MAX as u64, rest == 0 && i + 1 == full);
+            }
+            if rest > 0 {
+                total += line(rest, true);
+            }
+            total
+        }
+
+        /// (SHA-256, git's blob id) of the bytes, once the body is read whole.
+        pub fn finish(self) -> (String, String) {
+            assert_eq!(self.left, 0, "the body was read whole");
+            let hex = |d: ring::digest::Digest| d.as_ref().iter().map(|b| format!("{b:02x}")).collect::<String>();
+            (hex(self.sha256.finish()), hex(self.sha1.finish()))
+        }
+
+        fn refill(&mut self) {
+            if !self.head.is_empty() {
+                self.pending = std::mem::take(&mut self.head);
+                self.at = 0;
+                return;
+            }
+            if self.left == 0 {
+                return;
+            }
+            let n = self.left.min(CHUNK_MAX as u64) as usize;
+            let mut data = vec![0u8; n];
+            for b in data.chunks_mut(8) {
+                self.x ^= self.x << 13;
+                self.x ^= self.x >> 7;
+                self.x ^= self.x << 17;
+                let w = self.x.to_le_bytes();
+                b.copy_from_slice(&w[..b.len()]);
+            }
+            self.sha256.update(&data);
+            self.sha1.update(&data);
+            self.left -= n as u64;
+            self.pending = chunk_line(&data, self.left == 0);
+            self.at = 0;
+        }
+    }
+
+    impl std::io::Read for BigPack {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.at == self.pending.len() {
+                self.refill();
+                if self.pending.is_empty() || self.at == self.pending.len() {
+                    return Ok(0);
+                }
+            }
+            let n = buf.len().min(self.pending.len() - self.at);
+            buf[..n].copy_from_slice(&self.pending[self.at..self.at + n]);
+            self.at += n;
+            if self.at == self.pending.len() {
+                self.pending.clear();
+                self.at = 0;
+            }
+            Ok(n)
+        }
+    }
+
+}

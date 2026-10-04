@@ -137,14 +137,20 @@ a policy choice rather than the service's behaviour.
    check of a 36-character, four-hyphen repo is a fake-ism and would
    fail against macrofiche as it would against the service. *Paul to
    confirm* the e2e check is relaxed.
-2. **Webhooks: configured per org**, in macrofiche's config file (a URL
-   and a secret file), as the service's dashboard makes one org-wide
-   subscription. No registration route. Fragment does not use webhooks
-   on the hosted fleet today (its pins move by `refresh`, its own
-   commits, and the poll), so nothing changes for it. *Paul to confirm*
-   whether the cell should later get an org-wide receiving route, or
-   macrofiche a per-repo registration extension (`PUT
-   /api/repos/{repo}/webhook`); either is small.
+2. **Webhooks: per org in the config, and per repository by
+   macrofiche's own route.** The org's hooks (a URL and a secret file
+   each) are the service's model: one org-wide subscription, made in its
+   dashboard. But the cell verifies each delivery with its fragment's own
+   secret, routed per fragment, so an org-wide hook cannot reach a
+   fragment. macrofiche therefore adds an extension, not the service's:
+   `PUT /api/repos/{repo}/webhook {url, secret}` (scope `repo:write`; at
+   most 4 per repository, replaced by URL) and `DELETE
+   /api/repos/{repo}/webhook?url=`. The cell can call it at create and at
+   `rotate`, and the e2e as it calls the fake's `register_webhook`. A
+   move is delivered to both kinds. Fragment uses no webhook in
+   production today (its pins move by `refresh`, its own commits, and the
+   poll), so nothing changes until it registers. *Paul to confirm* the
+   cell calls the route.
 3. **Merging into a diverged `live`: git's three-way merge**, as the
    service (settled upstream by fragment PR #127, contract section 15):
    `no_op` when the target holds the source, a fast-forward when it can,
@@ -155,9 +161,16 @@ a policy choice rather than the service's behaviour.
    answers 412 for the tip, a non-ancestor, and no change.
 4. **History order: commit-date order** over every reachable commit, as
    the service (`git log --date-order`): the tip is always first, and on
-   linear history (every branch fragment writes but a deploy after a
-   rollback) it equals first parents. `limit` defaults to 20, at most
-   100, with an opaque cursor that pins the tip it started from.
+   linear history it equals first parents. `limit` defaults to 20, at
+   most 100, with an opaque cursor that pins the tip it started from.
+   Since PR #127, `live` holds merge commits after a deploy that follows
+   a rollback, so its history in date order includes main's commits
+   merged in, sorted by date among the deploys; the fake walks first
+   parents. PR #127's own test reads `live`'s history by first parents
+   (the port here asserts what holds either way), and `rollback`'s
+   default target (element 1) can be a main commit on the service. *Paul
+   to confirm*: fragment may want `drafts` and `rollback` to walk first
+   parents themselves.
 5. **Large files: keep the pointers.** Fragment's bytes of 1 MiB or more
    stay in its bucket, and a pointer is an ordinary blob to macrofiche.
    macrofiche still holds large blobs well (a blob to 1 GiB, streamed in
@@ -358,8 +371,10 @@ owns it) and is checked where input arrives.
 
 After every branch move (commit pack, merge, restore, branch create,
 and later a push), one delivery per moved branch to each of the org's
-configured URLs, none when `before = after` or the ref is ephemeral. The
-body is the union of the fake's and the service's:
+configured URLs and each URL the repository registered (`PUT
+/api/repos/{repo}/webhook`, question 2), none when `before = after` or
+the ref is ephemeral. The body is the union of the fake's and the
+service's:
 
 ```json
 {"type": "push", "org": "<org>",
@@ -370,10 +385,71 @@ body is the union of the fake's and the service's:
 
 Headers: `content-type: application/json`, `x-pierre-event: push`,
 `x-pierre-signature: t=<unix s>,sha256=<hex HMAC-SHA256(secret, "<t>.<body>")>`,
-`user-agent: Pierre-Webhook/1.0`. Each attempt is signed again. The
-queue is in memory and bounded; delivery is at least once while the
-process lives, best effort across a restart (the cell's poll catches a
-lost one).
+`user-agent: Pierre-Webhook/1.0`. Each attempt is signed again; five
+attempts at most, 1, 2, 4 and 8 s apart, 10 s each, until a 2xx. The
+queue is in memory and bounded (10 000 waiting, 64 delivering);
+delivery is at least once while the process lives, best effort across a
+restart (the cell's poll catches a lost one). A repository's registered
+secrets live in its `macrofiche/webhooks.json`, mode 0600.
+
+## Config and command line
+
+`macrofiche serve --config <file>` reads one JSON file, checked at start
+(unknown fields refused). Only `listen`, `state_dir` and `orgs` are
+required, which is exactly what fragment's dev stack writes
+(`crates/devstack/src/codestore.rs` on its `selfhost-macrofiche` branch):
+
+```json
+{"listen": "127.0.0.1:9600",
+ "state_dir": "/var/lib/macrofiche",
+ "orgs": [{"name": "fragment-dev",
+           "keys": [{"pem_file": "/etc/macrofiche/fragment-dev.pub.pem", "kid": "k1"}],
+           "webhooks": [{"url": "https://…", "secret_file": "/etc/macrofiche/hook.secret"}]}],
+ "git_prefix": "/opt/macrofiche/git-2.55.0",
+ "jail": "enforce",
+ "tls": {"cert_file": "/etc/macrofiche/tls.crt", "key_file": "/etc/macrofiche/tls.key"},
+ "maintenance_idle_s": 60}
+```
+
+- `keys`: each `pem_file` or `pem` (inline SPKI PEM; a public key is no
+  secret), and an optional `kid`.
+- `webhooks`: optional; secrets only by file.
+- `git_prefix`: optional; else `MACROFICHE_GIT_PREFIX`, else beside the
+  binary as `cargo xtask engine` builds it (`target/release/macrofiche`
+  finds `target/engine/git-2.55.0`).
+- `jail`: `enforce` (the default) or `off`, the operator's choice for a
+  host without Landlock.
+- `tls`: optional; without it macrofiche serves plain HTTP for a private
+  network or a proxy in front.
+
+Once it answers, it prints one line to stdout, `{"event":"serving",
+"addr":"…","tls":…,"landlock_abi":…,"pid":…}`; its log is JSON lines on
+stderr (recovery, maintenance, webhook failures, store errors). SIGTERM
+or SIGINT stops it accepting and gives requests in flight 15 s.
+`macrofiche check --config <file>` reads a config, its keys and its
+secrets, and prints what it would serve; `macrofiche pubkey <pkcs8.pem>`
+prints the SPKI PEM of fragment's `CODESTORAGE_PRIVATE_KEY` for a
+config's `keys`; `macrofiche version` names the pinned git.
+
+## Dependencies
+
+Pinned exactly in the workspace's `Cargo.toml`; each vetted when it came
+in. All but `base64` are sandcastle's own pins or in its tree.
+
+| Crate | Version | Why | Vetted |
+|---|---|---|---|
+| hyper, hyper-util, http-body-util | 1.11.0, 0.1.20, 0.1.5 | HTTP/1.1 server and webhook client | sandcastle's pins |
+| tokio | 1.53.1 | runtime, processes, timers | sandcastle's pin |
+| rustls, tokio-rustls, webpki-roots | 0.23.43, 0.26.4, 1.0.9 | optional TLS listener, https webhooks, the engine's download | sandcastle's pins, ring provider |
+| ring | 0.17.14 | ECDSA P-256 verify, HMAC-SHA256, SHA-256, random ids | in sandcastle's tree (rustls); one crypto library instead of p256, hmac, sha2 |
+| base64 | 0.22.1 | blob chunks, JWT segments | no dependencies; MIT/Apache-2.0; the de facto crate |
+| serde, serde_json, thiserror | 1.0.229, 1.0.151, 2.0.20 | wire types, typed errors | sandcastle's pins |
+| libc | 0.2.189 | Landlock, seccomp, prctl, rlimits, renameat2 | sandcastle's pin |
+| flate2, tar | 1.1.10, 0.4.46 | the engine's tarball (xtask only) | sandcastle's pins |
+
+The `landlock` crate was considered and not taken: it pulls `anyhow`,
+`enumflags2`, `lazy_static` and `strum`, and three raw syscalls (as
+sandcastle does its seccomp) are less to vet.
 
 ## Phases
 
@@ -435,9 +511,130 @@ threads, Linux 7.2.5 with Landlock ABI 10, btrfs on NVMe, rustc 1.99.0).
   unknown id, which the first reading missed (it would have been a 500,
   not a 404).
 
+### P3 and P4, the service and its evidence
+
+The release binary, driven over loopback by `macrofiche-bench` (one
+fresh TCP connection per request), each scenario on its own state
+directory; `cargo run --release -p macrofiche-bench -- all --write`
+writes `docs/evidence/{latency,blob,race,crash,maintenance}.json`.
+
+**Tests.** 91 in all: the pure crates' (contract 9, auth 4, pack 5, store
+7, server 4, git 20), the engine's against git 2.55.0 (conformance 9,
+engine 6), the store's against the engine (5, every listed file's last commit checked against git's own `log -1`
+through fast-forwards, a rollback, three-way merges, a conflict, and
+more than one snapshot interval), and 22 integration tests against the
+real binary: every route valid, invalid and replayed (7), fragment's own
+tests where they describe the contract (9: the fake's JWT test with the
+service's statuses, six of the CLI's, PR #127's deploy after a rollback
+with its `Promotion` logic ported, a lost answer), 16 racing writers,
+kill -9 rounds, a 100 MiB blob, and the webhook (2).
+
+**fragment's e2e** (`docs/evidence/fragment-e2e.json`), run by fragment's
+own harness on its `selfhost-macrofiche` branch against the release
+binary started with the config its dev stack writes: `codestore`,
+`create`, `deploy`, `files` and `sync`, 123 passed, 0 failed, 6 skipped
+(each for the fake's levers, the browser, or a webhook nobody
+registered). Its 22 `codestore` probes of the contract all pass,
+including the five that hold only on a store that follows the service
+(the url form, problem bodies, ephemeral refs, restore to the tip, a
+token for another repo).
+
+**Latency** (`latency.json`, 200 samples a route, a repository of 106
+files; ms):
+
+| Route | p50 | p95 | max |
+|---|---|---|---|
+| `POST commit-pack`, 1 file, durable | 7.27 | 7.83 | 11.26 |
+| `POST commit-pack`, 5 files, durable | 8.68 | 9.32 | 9.73 |
+| `GET branch` | 0.13 | 0.17 | 0.24 |
+| `GET file`, 1 KiB | 0.14 | 0.17 | 0.58 |
+| `HEAD file` | 0.10 | 0.13 | 0.20 |
+| `GET files/metadata`, a new head (ls-tree, the map, the topo walk) | 3.48 | 4.48 | 4.67 |
+| `GET files/metadata`, the same head again (cached) | 0.41 | 0.50 | 0.63 |
+| `GET commits`, 30 | 2.10 | 2.96 | 3.14 |
+| `GET merge/preview` (merge-base, merge-tree) | 9.72 | 13.94 | 14.59 |
+| `POST merge`, three-way, durable | 13.42 | 17.88 | 18.49 |
+| `POST restore-commit`, durable | 7.92 | 10.28 | 11.27 |
+| `POST branches/create` | 2.18 | 2.41 | 2.65 |
+| `POST /api/repos` (50) | 3.64 | 4.31 | 6.93 |
+| `GET /api/repos`, 100 (50) | 0.17 | 0.22 | 0.22 |
+
+A durable commit is three git processes (fast-import, diff-tree,
+update-ref) and two fsynced files of macrofiche's (the index record and
+nothing else on a commit to an existing branch): 7.3 ms against the
+spike's 8.9 for fast-import and update-ref alone. Reads through the
+pooled `cat-file` stay near 0.1 ms. After the 3,000-odd requests,
+macrofiche held 10 MiB of heap (16 MiB resident).
+
+**A 100 MiB blob** (`blob.json`): 139.8 MB of commit pack in, 3.7 s
+(27 MiB/s, client encoding included), and out in 47 ms (2.1 GiB/s from
+the page cache), checked byte for byte with git's blob id. Peak heap:
+macrofiche 50.6 MiB in and 29.3 MiB out, fast-import 29.3 MiB, the
+`cat-file` reader 0.3 MiB. Neither grows with the blob: macrofiche holds
+one line and one decoded chunk at a time, git streams past
+`core.bigFileThreshold`.
+
+**Sixteen writers on one branch** (`race.json`), each until 20 of its
+commits land, retrying on 409 as the CLI does: 320 landed in 2.5 s (127
+commits/s) out of 2,921 attempts (2,601 refused with 409, nothing
+applied), 321 commits of linear history and 321 files; a pack's answer
+p50 7.7 ms, p99 8.6. Sixteen writers on repositories of their own: 784
+commits/s.
+
+**kill -9** (`crash.json`): 20 rounds of four writers committing 256 KiB
+files, the server killed after 100 to 700 ms with 3 to 5 git processes
+running, restarted on the same state: `git fsck --full --strict` clean
+after every round, 982 acknowledged commits and none lost, the next
+write landing every time; a restart serves in 4 to 6 ms. Boot recovery
+cleared, across the rounds, 1 stale ref lock, 70 spools, 11 temporary
+objects, and 4 temporary refs. Every git died with the server
+(`PR_SET_PDEATHSIG`).
+
+**Maintenance** (`maintenance.json`): after 300 commits, 1,200 loose
+objects (4.8 MB) became one pack of 110 KiB in 300 ms (geometric repack,
+loose objects, pack-refs, commit-graph, and the day's gc), under the
+repository's write lock; `GET commits` went from 2.67 to 1.42 ms.
+
 ## Debt
 
 *This list is macrofiche's ledger: each item stays here until it is paid.*
+
+- `GET file` honors `If-None-Match` (304) but not `Range`, `If-Range`,
+  `If-Match` or the date conditionals the service documents, and sends
+  no `accept-ranges`; fragment sends none of them.
+- The webhook queue is in memory: deliveries waiting at a restart are
+  lost (the cell's poll and `refresh` catch them).
+- The index is rebuilt (a commit macrofiche did not write, or a lost
+  index) with a `diff-tree` per commit: about 1.5 ms each, written as it
+  goes. One `git log --raw` stream would be faster, but cannot say which
+  parent an empty per-parent diff belongs to.
+- Index records of commits no ref reaches (a CAS that lost, an abandoned
+  merge) are never removed; they are small.
+- `FileLastCommit.order` takes one `rev-list --topo-order` walk per newly
+  listed commit, as deep as its oldest last commit.
+- A path that is not UTF-8 (only a future push could write one) is read
+  lossily.
+- A branch macrofiche did not see made (none today) reports its tip's
+  committer date as `created_at`.
+- The merge preview's `include_content` renders no conflict content; each
+  conflict is listed in `filtered_conflicts`.
+- `force` on `branches/create`, and `base_repo` and `upstream` on create,
+  are refused with 400.
+- No rate limiting (429); overload answers 503.
+- Maintenance holds the repository's write lock; a large repack would
+  hold its writers up to the 10-minute deadline.
+- Ephemeral refs are never expired; fragment never deletes a preview.
+- Spools are bounded per pack (2 GiB) and by 64 packs in flight, not in
+  total bytes.
+- After a large upload macrofiche's resident memory stays at its
+  high-water mark (the allocator keeps freed arenas).
+- A repository's webhook secrets sit in its directory (mode 0600), not
+  in a secret store.
+- `GET /api/repos` sorts the org's repositories in memory for each page.
+- The `merge` strategy is read as "always a merge commit" and `ff_only`'s
+  refusal as 409 `not_fast_forward`; the service's documents leave both
+  open.
+- The TLS listener is built and smoke-tested by hand, not by the suite.
 
 ## Risks
 

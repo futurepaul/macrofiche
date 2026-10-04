@@ -249,6 +249,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "macrofiche-bench"
+version = "0.1.0"
+dependencies = [
+ "macrofiche-testkit",
+ "ring",
+ "serde_json",
+]
+
+[[package]]
 name = "macrofiche-contract"
 version = "0.1.0"
 dependencies = [

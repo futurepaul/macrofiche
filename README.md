@@ -11,9 +11,22 @@ drives git. How the two meet is [docs/design.md](docs/design.md).
 
 ## Status
 
-**Design.** The contract and the library decision are done; the design
-is written (docs/design.md, phase 1). The engine, the service, and their
-evidence are the next phases.
+**Serving, measured on one machine, not yet run in production.** Every
+route of the contract and the push webhook, on git 2.55.0 jailed per
+process (docs/design.md; evidence in `docs/evidence/`, measured
+2026-10-03 on a Ryzen 9 9950X3D, Linux 7.2.5, btrfs on NVMe):
+
+| | |
+|---|---|
+| fragment's own e2e (`codestore`, `create`, `deploy`, `files`, `sync`) against the release binary | 123 passed, 0 failed, 6 skipped (the fake's levers, the browser, webhooks) |
+| a durable one-file commit pack; a file read; a listing of 106 files at a new head | 7.3 ms; 0.14 ms; 3.5 ms (p50) |
+| a 100 MiB blob in and out | 3.7 s in, 47 ms out; macrofiche's heap at most 51 MiB, git's 29 MiB |
+| sixteen writers racing on one branch | 320 of 320 commits, linear, 127 commits/s, 2,601 refused 409s applying nothing |
+| twenty rounds of kill -9 mid-write and a restart | `fsck --strict` clean every round, 982 acknowledged commits, none lost |
+
+What is not done: smart HTTP (`git clone`, `fetch`, `push`; phase 5), a
+node on another filesystem or kernel, and the debt in docs/design.md,
+Debt.
 
 ## Layout
 
@@ -38,7 +51,15 @@ cargo xtask engine            # git 2.55.0 into target/engine/git-2.55.0
 cargo build --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo build --release -p macrofiche -p macrofiche-bench
+target/release/macrofiche-bench all --write   # docs/evidence/*.json
 ```
+
+Running it: `macrofiche serve --config <file>` (docs/design.md, Config
+and command line; `macrofiche check --config <file>` reads one,
+`macrofiche pubkey <pkcs8.pem>` derives an org's public key from the
+private key fragment holds). It needs Linux with Landlock (5.13; 6.7 for
+its TCP rules) and no root.
 
 `cargo xtask engine` downloads git's release tarball from kernel.org,
 checks its SHA-256 against the pinned value, and builds it with `make`
