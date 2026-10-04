@@ -7,3 +7,7 @@ publish = false
 description = "Test support for macrofiche: scratch directories, the engine's prefix, a blocking HTTP/1.1 client and server, ES256 keys and tokens, and the real binary spawned on a temporary state directory."
 
 [dependencies]
+ring.workspace = true
+base64.workspace = true
+serde_json.workspace = true
+libc.workspace = true

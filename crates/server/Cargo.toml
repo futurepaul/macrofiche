@@ -1,0 +1,33 @@
+[package]
+name = "macrofiche"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "macrofiche: code.storage's API on git (docs/contract.md, docs/design.md). The HTTP server, its config, the push webhook, and the command line."
+
+[[bin]]
+name = "macrofiche"
+path = "src/main.rs"
+
+[dependencies]
+macrofiche-contract = { path = "../contract" }
+macrofiche-auth = { path = "../auth" }
+macrofiche-pack = { path = "../pack" }
+macrofiche-git = { path = "../git" }
+macrofiche-store = { path = "../store" }
+hyper.workspace = true
+hyper-util.workspace = true
+http-body-util.workspace = true
+tokio.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+webpki-roots.workspace = true
+ring.workspace = true
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+macrofiche-testkit = { path = "../testkit" }

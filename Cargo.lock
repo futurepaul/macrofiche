@@ -212,6 +212,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "macrofiche"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "libc",
+ "macrofiche-auth",
+ "macrofiche-contract",
+ "macrofiche-git",
+ "macrofiche-pack",
+ "macrofiche-store",
+ "macrofiche-testkit",
+ "ring",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "webpki-roots",
+]
+
+[[package]]
 name = "macrofiche-auth"
 version = "0.1.0"
 dependencies = [
@@ -273,6 +298,12 @@ dependencies = [
 [[package]]
 name = "macrofiche-testkit"
 version = "0.1.0"
+dependencies = [
+ "base64",
+ "libc",
+ "ring",
+ "serde_json",
+]
 
 [[package]]
 name = "macrofiche-xtask"

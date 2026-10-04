@@ -183,8 +183,14 @@ impl Store {
         result
     }
 
-    pub fn repos_page(&self, org: &str, after: Option<(i64, &str)>, limit: usize) -> (Vec<RepoMeta>, bool) {
-        self.registry.lock().expect("the registry lock").page(org, after, limit)
+    pub fn repos_page(&self, org: &str, after: Option<(i64, &str)>, limit: usize, q: Option<&str>) -> (Vec<RepoMeta>, bool) {
+        self.registry.lock().expect("the registry lock").page(org, after, limit, q)
+    }
+
+    /// Ends readers idle past their time in every open repository.
+    pub fn reap_idle(&self) -> usize {
+        let open: Vec<Arc<RepoHandle>> = self.handles.lock().expect("the handles lock").values().filter_map(Weak::upgrade).collect();
+        open.iter().map(|h| h.pool.reap()).sum()
     }
 
     pub fn repo_by_id(&self, org: &str, id: &str) -> Option<RepoMeta> {

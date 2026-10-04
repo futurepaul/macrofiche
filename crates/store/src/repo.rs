@@ -264,6 +264,12 @@ impl RepoHandle {
         RepoHandle { meta, dir, git, pool, write_lock: tokio::sync::Mutex::new(()), caches, dirty }
     }
 
+    /// The lock every write of this repository takes (and maintenance,
+    /// and macrofiche's webhook registrations).
+    pub fn write_lock(&self) -> &tokio::sync::Mutex<()> {
+        &self.write_lock
+    }
+
     fn key(&self, c: Oid) -> (String, Oid) {
         (self.meta.repo_id.clone(), c)
     }

@@ -129,10 +129,10 @@ impl Registry {
     }
 
     /// An org's repositories newest first (by creation, then id), after
-    /// `after` (the last of the page before), at most `limit`; and whether
-    /// more follow.
-    pub fn page(&self, org: &str, after: Option<(i64, &str)>, limit: usize) -> (Vec<RepoMeta>, bool) {
-        let mut all: Vec<&RepoMeta> = self.by_name.values().filter(|m| m.org == org).collect();
+    /// `after` (the last of the page before), at most `limit`, those whose
+    /// name holds `q` (lowercase) when given; and whether more follow.
+    pub fn page(&self, org: &str, after: Option<(i64, &str)>, limit: usize, q: Option<&str>) -> (Vec<RepoMeta>, bool) {
+        let mut all: Vec<&RepoMeta> = self.by_name.values().filter(|m| m.org == org && q.is_none_or(|q| m.repo_name.to_ascii_lowercase().contains(q))).collect();
         all.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms).then_with(|| b.repo_id.cmp(&a.repo_id)));
         let start = match after {
             None => 0,
@@ -198,21 +198,23 @@ mod tests {
             r.insert(meta("o", &format!("n{i}"), id, 100 + i as i64));
         }
         r.insert(meta("other", "x", "z", 999));
-        let (p1, more) = r.page("o", None, 2);
+        let (p1, more) = r.page("o", None, 2, None);
         assert_eq!(p1.iter().map(|m| m.repo_id.as_str()).collect::<Vec<_>>(), ["e", "d"]);
         assert!(more);
         r.insert(meta("o", "late", "f", 200));
         let last = p1.last().unwrap();
-        let (p2, more) = r.page("o", Some((last.created_at_ms, &last.repo_id)), 2);
+        let (p2, more) = r.page("o", Some((last.created_at_ms, &last.repo_id)), 2, None);
         assert_eq!(p2.iter().map(|m| m.repo_id.as_str()).collect::<Vec<_>>(), ["c", "b"]);
         assert!(more);
         let last = p2.last().unwrap();
-        let (p3, more) = r.page("o", Some((last.created_at_ms, &last.repo_id)), 2);
+        let (p3, more) = r.page("o", Some((last.created_at_ms, &last.repo_id)), 2, None);
         assert_eq!((p3.len(), more), (1, false));
         // the same millisecond: ties break by id
         r.insert(meta("o", "tie", "ab", 100));
-        let (all, _) = r.page("o", None, 100);
+        let (all, _) = r.page("o", None, 100, None);
         assert_eq!(all.iter().map(|m| m.repo_id.as_str()).collect::<Vec<_>>(), ["f", "e", "d", "c", "b", "ab", "a"]);
+        let (late, _) = r.page("o", None, 100, Some("lat"));
+        assert_eq!(late.iter().map(|m| m.repo_name.as_str()).collect::<Vec<_>>(), ["late"]);
     }
 
     // Goal: a name is created once: a second create while the first runs,
