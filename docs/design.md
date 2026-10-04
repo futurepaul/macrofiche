@@ -406,7 +406,34 @@ Each phase ends with its tests green, `cargo clippy --workspace
 
 ## Evidence
 
-*Filled in as phases close.*
+Measured on the library spike's machine (AMD Ryzen 9 9950X3D, 32
+threads, Linux 7.2.5 with Landlock ABI 10, btrfs on NVMe, rustc 1.99.0).
+
+### P2, the engine (`docs/evidence/engine.json`)
+
+- **The build.** `cargo xtask engine` downloads git 2.55.0 (12.2 MB),
+  checks its SHA-256 (`0842dc38…3d1e`), and builds it into
+  `target/engine/git-2.55.0` in 5.9 s on 32 cores (87 MB installed; it
+  links only libc and libz). git 2.55's own Rust part is built, as its
+  default build does.
+- **Tests:** 20 unit (parsers, the jail's plan, the seccomp program run
+  by an interpreter, the fast-import stream, the pin), 9 conformance
+  (each update-ref refusal, unknown objects in five calls, unrelated
+  histories, fast-import's refusals, each produced by the engine), and 6
+  engine tests (every plumbing call, the pool, a large blob, the jail,
+  deadlines).
+- **The jail holds.** A jailed git pointed at another repository answers
+  "not a git repository"; at a file outside, "Permission denied"; asked
+  to create a repository outside, "cannot mkdir … Permission denied";
+  sent to a TCP listener on 127.0.0.1, "errno=Operation not permitted",
+  and the listener sees no connection. With the jail off, the same four
+  succeed and the listener is reached (the control).
+- **A blob streams.** 48 MiB of incompressible bytes go in from a spool
+  through `fast-import` and out through a pooled `cat-file`, checked
+  byte for byte; the reader's heap peaks at 308 KiB.
+- **Found by the conformance tests:** `rev-list` says "bad object" for an
+  unknown id, which the first reading missed (it would have been a 500,
+  not a 404).
 
 ## Debt
 

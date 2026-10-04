@@ -1,0 +1,49 @@
+# macrofiche: code.storage's API on git, as jailed processes (README.md,
+# docs/design.md). Versions are pinned exactly; where sandcastle pins a
+# crate, this pins sandcastle's version. Each was vetted when it came in
+# (docs/design.md, Dependencies).
+[workspace]
+resolver = "2"
+members = ["crates/git", "crates/testkit", "crates/xtask"]
+# git's own Rust crate is unpacked under target/engine by `cargo xtask
+# engine`; the library spike is a workspace of its own.
+exclude = ["target", "spikes"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# HTTP: sandcastle's stack.
+hyper = { version = "=1.11.0", features = ["http1", "server", "client"] }
+hyper-util = { version = "=0.1.20", features = ["tokio"] }
+http-body-util = "=0.1.5"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "net", "process", "time", "io-util", "sync", "signal", "fs"] }
+# TLS: an https webhook target, an optional TLS listener, the engine's
+# download. ring as rustls's provider, as sandcastle's.
+rustls = { version = "=0.23.43", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "=0.26.4", default-features = false, features = ["ring", "tls12", "logging"] }
+webpki-roots = "=1.0.9"
+# ECDSA P-256 verification, HMAC-SHA256, SHA-256, random ids: one crypto
+# library, already in sandcastle's tree through rustls.
+ring = "=0.17.14"
+# The commit pack's blob chunks and the JWTs' segments. No dependencies.
+base64 = "=0.22.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+thiserror = "=2.0.20"
+# Landlock, seccomp, prctl, rlimits, renameat2.
+libc = "=0.2.189"
+# The engine's tarball (xtask only).
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+tar = { version = "=0.4.46", default-features = false }
+
+# The seatbelt stays on, as sandcastle's: a failed assertion takes the
+# whole process down, never one task of it while the rest carries on.
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+strip = true
+overflow-checks = true
+panic = "abort"

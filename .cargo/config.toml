@@ -1,0 +1,3 @@
+# `cargo xtask engine` builds git 2.55.0 into target/engine (crates/xtask).
+[alias]
+xtask = "run --quiet -p macrofiche-xtask --"

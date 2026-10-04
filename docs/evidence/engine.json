@@ -1,0 +1,34 @@
+{
+  "phase": "P2, the engine",
+  "date": "2026-10-03",
+  "machine": "AMD Ryzen 9 9950X3D (32 threads), Linux 7.2.5, btrfs on NVMe, rustc 1.99.0",
+  "how": "cargo xtask engine; cargo test -p macrofiche-git --test engine -- --nocapture (the lines tagged evidence)",
+  "engine": {
+  "build_s": 5.3,
+  "make_flags": [
+    "NO_CURL=1",
+    "NO_EXPAT=1",
+    "NO_PERL=1",
+    "NO_PYTHON=1",
+    "NO_TCLTK=1",
+    "NO_GETTEXT=1",
+    "NO_OPENSSL=1",
+    "NO_GITWEB=1",
+    "NO_INSTALL_HARDLINKS=1",
+    "INSTALL_SYMLINKS=1",
+    "SKIP_DASHED_BUILT_INS=1",
+    "RUNTIME_PREFIX=YesPlease"
+  ],
+  "prefix": "/home/futurepaul/dev/finite/macrofiche/target/engine/git-2.55.0",
+  "tarball_sha256": "0842dc384a23ac33ba3e570c4f3a8ded85963ee4713b1cd21153c3db41813d1e",
+  "tarball_url": "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.55.0.tar.gz",
+  "version": "2.55.0"
+},
+  "landlock_abi": 10,
+  "tests": {"unit": 20, "conformance": 9, "engine": 6},
+  "runs": [
+    {"evidence":"jail-probe","enforce":true,"connected":false,"read_other":"fatal: not a git repository: '/home/futurepaul/dev/finite/macrofiche/target/test-tmp/engine-1546183-3/theirs.git'","read_file":"fatal: could not open '/home/futurepaul/dev/finite/macrofiche/target/test-tmp/engine-1546183-3/secret.txt' for reading: Permission denied","write_out":"fatal: cannot mkdir /home/futurepaul/dev/finite/macrofiche/target/test-tmp/engine-1546183-3/outside.git: Permission denied","net":"fatal: unable to connect to 127.0.0.1:\n127.0.0.1[0: 127.0.0.1]: errno=Operation not permitted"},
+    {"evidence":"engine-stream","blob_bytes":50331648,"catfile_peak_rss_anon_kib":300},
+    {"evidence":"jail-probe","enforce":false,"connected":true,"read_other":"","read_file":"","write_out":"","net":""}
+  ]
+}

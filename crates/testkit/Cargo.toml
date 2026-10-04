@@ -1,0 +1,9 @@
+[package]
+name = "macrofiche-testkit"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Test support for macrofiche: scratch directories, the engine's prefix, a blocking HTTP/1.1 client and server, ES256 keys and tokens, and the real binary spawned on a temporary state directory."
+
+[dependencies]
