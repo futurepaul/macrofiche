@@ -55,6 +55,10 @@ where
     let _ = hyper::server::conn::http1::Builder::new()
         .timer(hyper_util::rt::TokioTimer::new())
         .header_read_timeout(HEADER_READ_TIMEOUT)
+        // A client that hangs up once its request is sent keeps its
+        // request: a whole commit pack lands though its answer is lost
+        // (contract section 9), as the store's writes run to their end.
+        .half_close(true)
         .keep_alive(true)
         .serve_connection(io, svc)
         .await;

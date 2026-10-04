@@ -530,7 +530,14 @@ fn announce(app: &App, h: &RepoHandle, moved: Option<Moved>) {
     }
 }
 
-async fn commit_pack(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Problem> {
+/// Runs a write to its end on a task of its own: once a request is whole,
+/// its client going away does not stop it halfway (a client whose answer
+/// is lost re-reads and finds the write landed, contract section 9).
+async fn detached<T: Send + 'static>(f: impl std::future::Future<Output = T> + Send + 'static) -> Result<T, Problem> {
+    tokio::spawn(f).await.map_err(|e| Problem::internal(format!("a write's task: {e}")))
+}
+
+async fn commit_pack(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> Result<Resp, Problem> {
     let _slot = tokio::time::timeout(PACK_SLOT_WAIT, app.packs.clone().acquire_owned())
         .await
         .map_err(|_| Problem::unavailable("too many commit packs are uploading"))?
@@ -601,7 +608,14 @@ async fn commit_pack(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Resul
         Ok(a) => a,
         Err(p) => return Ok(pack_answer(400, &meta.target_branch, None, None, None, 0, 0, "invalid", Some(&p.detail))),
     };
-    let (outcome, moved) = h.commit_pack(&meta, &files, author, committer, now_s()).await.map_err(store_err)?;
+    let task_h = h.clone();
+    let (written, meta) = detached(async move {
+        let r = task_h.commit_pack(&meta, &files, author, committer, now_s()).await;
+        drop(spool);
+        (r, meta)
+    })
+    .await?;
+    let (outcome, moved) = written.map_err(store_err)?;
     let resp = match outcome {
         CommitOutcome::Committed(c) => pack_answer(201, &c.branch, c.old, Some(c.new), Some(c.tree), total, c.blob_count, "ok", None),
         CommitOutcome::Moved { current } => pack_answer(409, &meta.target_branch, current, current, None, 0, 0, "precondition_failed", Some("expected branch head did not match current tip")),
@@ -632,7 +646,7 @@ async fn spool_events(events: Vec<Event>, dir: &std::path::Path, meta: &mut Opti
     Ok(())
 }
 
-async fn create_branch(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Problem> {
+async fn create_branch(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> Result<Resp, Problem> {
     let b = json_body(req).await?;
     let target = branch_name(opt_str(&b, "target_branch")?.ok_or_else(|| bad("missing_target_branch", "target_branch is required"))?, "target_branch")?;
     let base = opt_str(&b, "base_ref")?.or(opt_str(&b, "base_branch")?).ok_or_else(|| bad("missing_base_ref", "base_ref is required"))?.to_string();
@@ -640,7 +654,8 @@ async fn create_branch(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Res
         return Err(bad("unsupported", "macrofiche does not force a branch over an existing one"));
     }
     let eph = opt_bool(&b, "target_is_ephemeral")?;
-    let (outcome, moved) = h.create_branch(&target, eph, &base, opt_bool(&b, "base_is_ephemeral")?, now_s()).await.map_err(store_err)?;
+    let (task_h, t, base_eph) = (h.clone(), target.clone(), opt_bool(&b, "base_is_ephemeral")?);
+    let (outcome, moved) = detached(async move { task_h.create_branch(&t, eph, &base, base_eph, now_s()).await }).await?.map_err(store_err)?;
     match outcome {
         CreateOutcome::Exists => Err(Problem::conflict("branch_exists", format!("branch already exists: {target}"))),
         CreateOutcome::Created(at) => {
@@ -663,7 +678,7 @@ fn merge_conflict(conflict_type: &str, error: &str, paths: &[String], base: Opti
     json(409, &v)
 }
 
-async fn merge(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Problem> {
+async fn merge(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> Result<Resp, Problem> {
     let b = json_body(req).await?;
     let target = branch_name(opt_str(&b, "target_branch")?.ok_or_else(|| bad("missing_target_branch", "target_branch is required"))?, "target_branch")?;
     let source = opt_str(&b, "source_ref")?.or(opt_str(&b, "source_branch")?).ok_or_else(|| bad("missing_source_ref", "source_ref is required"))?.to_string();
@@ -690,7 +705,8 @@ async fn merge(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp
         allow_unrelated: opt_bool(&b, "allow_unrelated_histories")?,
     };
     let (target_eph, source_eph) = (r.target_ephemeral, r.source_ephemeral);
-    let (outcome, moved) = h.merge(r, now_s()).await.map_err(store_err)?;
+    let task_h = h.clone();
+    let (outcome, moved) = detached(async move { task_h.merge(r, now_s()).await }).await?.map_err(store_err)?;
     let resp = match outcome {
         MergeOutcome::Done(d) => json(
             200,
@@ -712,7 +728,7 @@ async fn merge(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp
     Ok(resp)
 }
 
-async fn restore(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Problem> {
+async fn restore(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> Result<Resp, Problem> {
     let b = small_body(req, JSON_BODY_BYTES_MAX).await?;
     let line = b.split(|c| *c == b'\n').find(|l| !l.trim_ascii().is_empty()).ok_or_else(|| bad("invalid_body", "a restore is one metadata line"))?;
     let v: Value = serde_json::from_slice(line).map_err(|_| bad("invalid_body", "a restore's line is not JSON"))?;
@@ -721,7 +737,8 @@ async fn restore(app: &App, h: &RepoHandle, req: Request<Incoming>) -> Result<Re
     let base = opt_str(&m, "base_ref")?.ok_or_else(|| bad("missing_base_ref", "base_ref is required"))?.to_string();
     let expected = names::parse_expected(opt_str(&m, "expected_target_sha")?.or(opt_str(&m, "expected_head_sha")?)).ok_or_else(|| bad("invalid_sha", "expected_target_sha is a 40-hex sha"))?;
     let eph = opt_bool(&m, "target_is_ephemeral")? || opt_bool(&m, "ephemeral")?;
-    let (outcome, moved) = h.restore(&target, eph, &base, &expected, &message(&m)?, ident(&m, "author")?, ident(&m, "committer")?, now_s()).await.map_err(store_err)?;
+    let (task_h, t, msg, author, committer) = (h.clone(), target.clone(), message(&m)?, ident(&m, "author")?, ident(&m, "committer")?);
+    let (outcome, moved) = detached(async move { task_h.restore(&t, eph, &base, &expected, &msg, author, committer, now_s()).await }).await?.map_err(store_err)?;
     let resp = match outcome {
         RestoreOutcome::Done(c) => pack_answer(201, &target, c.old, Some(c.new), Some(c.tree), 0, 0, "ok", None),
         RestoreOutcome::Moved { current } => pack_answer(409, &target, Some(current), Some(current), None, 0, 0, "precondition_failed", Some("expected branch head did not match current tip")),

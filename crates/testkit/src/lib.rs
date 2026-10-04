@@ -55,6 +55,12 @@ impl Key {
         Key { pair, pkcs8 }
     }
 
+    /// The key of a PKCS#8 document (another handle on one key).
+    pub fn from_pkcs8(pkcs8: &[u8]) -> Key {
+        let pair = ring::signature::EcdsaKeyPair::from_pkcs8(&ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8, &ring::rand::SystemRandom::new()).expect("a PKCS#8 P-256 key");
+        Key { pair, pkcs8: pkcs8.to_vec() }
+    }
+
     /// PKCS#8 PEM: what `macrofiche pubkey` reads.
     pub fn private_pem(&self) -> String {
         pem("PRIVATE KEY", &self.pkcs8)

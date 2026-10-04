@@ -1,0 +1,154 @@
+{
+  "phase": "P3/P4, fragment's own e2e against macrofiche",
+  "date": "2026-10-03",
+  "how": "in fragment's worktree on branch selfhost-macrofiche (fragment-macrofiche): FRAGMENT_E2E_RUNTIME=celld CELLD_BIN=\u2026/celld CHROME_BIN=/usr/bin/chromium FRAGMENT_E2E_CODESTORE=macrofiche MACROFICHE_BIN=target/release/macrofiche cargo xtask e2e --only codestore,create,deploy,files,sync",
+  "macrofiche_commit": "7e200e5",
+  "summary": "123 passed, 0 failed, 6 skipped (each says why)",
+  "sections": {
+    "create": {
+      "ok": 41,
+      "fail": 0,
+      "skip": 0
+    },
+    "files": {
+      "ok": 26,
+      "fail": 0,
+      "skip": 0
+    },
+    "codestore": {
+      "ok": 22,
+      "fail": 0,
+      "skip": 0
+    },
+    "deploy": {
+      "ok": 21,
+      "fail": 0,
+      "skip": 3
+    },
+    "sync": {
+      "ok": 13,
+      "fail": 0,
+      "skip": 3
+    }
+  },
+  "checks": [
+    {
+      "result": "ok",
+      "check": "a repo's name made again is 409"
+    },
+    {
+      "result": "ok",
+      "check": "a call without a bearer is 401"
+    },
+    {
+      "result": "ok",
+      "check": "a commit pack whose chunks interleave lands as one commit"
+    },
+    {
+      "result": "ok",
+      "check": "its chunks join in order"
+    },
+    {
+      "result": "ok",
+      "check": "HEAD file names the blob, its size and its last commit, with no body"
+    },
+    {
+      "result": "ok",
+      "check": "GET file carries the same identity, and an etag of the blob"
+    },
+    {
+      "result": "ok",
+      "check": "a listing walked a file a page names each file once, recursively, with git's last commits"
+    },
+    {
+      "result": "ok",
+      "check": "a pack on a stale head is 409 precondition_failed, and nothing lands"
+    },
+    {
+      "result": "ok",
+      "check": "a chunk for a delete is refused (400 invalid), and nothing lands"
+    },
+    {
+      "result": "ok",
+      "check": "an upsert whose stream has no eof is 400, and nothing lands"
+    },
+    {
+      "result": "ok",
+      "check": "a branch made twice is 409 the second time"
+    },
+    {
+      "result": "ok",
+      "check": "a branch on an unknown base is 404"
+    },
+    {
+      "result": "ok",
+      "check": "a merge on a stale live is 409"
+    },
+    {
+      "result": "ok",
+      "check": "a merge that can fast-forward does: live at main's tip"
+    },
+    {
+      "result": "ok",
+      "check": "a restore to a commit live never held is 412"
+    },
+    {
+      "result": "ok",
+      "check": "a restore is a new commit on live with the old tree, its first parent live's tip"
+    },
+    {
+      "result": "ok",
+      "check": "history is newest first, the ref's tip first"
+    },
+    {
+      "result": "ok",
+      "check": "the url form is the repo's name"
+    },
+    {
+      "result": "ok",
+      "check": "a refusal is a problem body with a code and a title"
+    },
+    {
+      "result": "ok",
+      "check": "a preview ref lives apart: a plain read misses it, an ephemeral one finds it"
+    },
+    {
+      "result": "ok",
+      "check": "a restore to live's own tip is 412"
+    },
+    {
+      "result": "ok",
+      "check": "a token for another repo on this repo's path is 404"
+    },
+    {
+      "section": "deploy",
+      "result": "skip",
+      "check": "a second deploy replaces the card: another image, of the new live: this node has no browser (celld: no Browser Rendering), so it shoots no cards"
+    },
+    {
+      "section": "deploy",
+      "result": "skip",
+      "check": "the card revalidates by its tag: 304 for the current one, the new image for the one before: this node has no browser (celld: no Browser Rendering), so it shoots no cards"
+    },
+    {
+      "section": "deploy",
+      "result": "skip",
+      "check": "the preview ref is ephemeral: it pulls the code.storage fake's flag on its refs, and the node's git is macrofiche (FRAGMENT_E2E_CODESTORE; docs/self-host.md, seam 5)"
+    },
+    {
+      "section": "sync",
+      "result": "skip",
+      "check": "two saves are two passes of one head read, one listing, and one commit each: it pulls the code.storage fake's count of the requests it answered, by caller, and the node's git is macrofiche (FRAGMENT_E2E_CODESTORE; docs/self-host.md, seam 5)"
+    },
+    {
+      "section": "sync",
+      "result": "skip",
+      "check": "and asks code.storage nothing for four poll intervals: a commit no webhook announced waits: it pulls the code.storage fake's count of the requests it answered, and the node's git is macrofiche (FRAGMENT_E2E_CODESTORE; docs/self-host.md, seam 5)"
+    },
+    {
+      "section": "sync",
+      "result": "skip",
+      "check": "a webhook brings the poll back to its interval too: no code store outside the run announces a commit by webhook: none registers the cell's (macrofiche's contract, question 2), so refresh and the poll move the pins"
+    }
+  ]
+}
