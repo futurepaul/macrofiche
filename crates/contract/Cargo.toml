@@ -1,0 +1,12 @@
+[package]
+name = "macrofiche-contract"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "code.storage's API as fragment uses it (docs/contract.md), as pure data: every limit a constant, names and their checks, query decoding, cursors, times, and the problem bodies."
+
+[dependencies]
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

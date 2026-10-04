@@ -48,6 +48,8 @@ pub struct CatFile {
     /// Bytes of an object still unread: nonzero means the process is
     /// mid-answer and must not be reused.
     pending: u64,
+    /// An error left its output out of step: never reused.
+    broken: bool,
 }
 
 impl CatFile {
@@ -58,11 +60,11 @@ impl CatFile {
         // Its stderr is unused: a failure shows as a closed pipe.
         drop(proc.stderr());
         let now = Instant::now();
-        Ok(CatFile { proc, stdin, stdout, born: now, last_used: now, requests: 0, pending: 0 })
+        Ok(CatFile { proc, stdin, stdout, born: now, last_used: now, requests: 0, pending: 0, broken: false })
     }
 
     fn reusable(&self) -> bool {
-        self.pending == 0 && self.born.elapsed() < AGE_MAX && self.requests < REQUESTS_MAX
+        !self.broken && self.pending == 0 && self.born.elapsed() < AGE_MAX && self.requests < REQUESTS_MAX
     }
 
     async fn ask(&mut self, verb: &str, name: &str) -> Result<CatHeader, GitError> {
@@ -106,7 +108,9 @@ impl CatFile {
             }
             Ok(parse::cat_header(&header)?)
         };
-        tokio::time::timeout(READ_DEADLINE, work).await.map_err(|_| GitError::Timeout { op: OP, after: READ_DEADLINE })?
+        let r = tokio::time::timeout(READ_DEADLINE, work).await.map_err(|_| GitError::Timeout { op: OP, after: READ_DEADLINE }).and_then(|r| r);
+        self.broken |= r.is_err();
+        r
     }
 
     /// An object's header by any name git resolves (`refs/heads/main`,
@@ -135,6 +139,12 @@ impl CatFile {
     /// Up to `buf.len()` more bytes of the object being read; 0 at its
     /// end. Each read has the read deadline.
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, GitError> {
+        let r = self.read_inner(buf).await;
+        self.broken |= r.is_err();
+        r
+    }
+
+    async fn read_inner(&mut self, buf: &mut [u8]) -> Result<usize, GitError> {
         if self.pending == 0 {
             return Ok(0);
         }
@@ -155,6 +165,12 @@ impl CatFile {
 
     /// The NUL after an object's bytes.
     async fn finish(&mut self) -> Result<(), GitError> {
+        let r = self.finish_inner().await;
+        self.broken |= r.is_err();
+        r
+    }
+
+    async fn finish_inner(&mut self) -> Result<(), GitError> {
         let mut nul = [0u8; 1];
         tokio::time::timeout(READ_DEADLINE, self.stdout.read_exact(&mut nul))
             .await

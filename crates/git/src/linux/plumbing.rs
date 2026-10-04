@@ -391,3 +391,48 @@ pub fn unknown_object(e: &GitError) -> bool {
 pub const fn read_deadline() -> Duration {
     READ_DEADLINE
 }
+
+/// A `rev-list` read line by line, for a walk that stops early: dropped,
+/// it ends its git.
+pub struct RevWalk {
+    _proc: super::process::Proc,
+    lines: tokio::io::Lines<tokio::io::BufReader<tokio::process::ChildStdout>>,
+    seen: usize,
+}
+
+impl RevWalk {
+    /// The next id, or `None` at the walk's end; each within the read
+    /// deadline, at most `REVS_MAX` in all.
+    pub async fn next(&mut self) -> Result<Option<Oid>, GitError> {
+        let op = "rev-list";
+        if self.seen == REVS_MAX {
+            return Err(GitError::OutputTooLarge { op, max: REVS_MAX });
+        }
+        let line = tokio::time::timeout(READ_DEADLINE, self.lines.next_line())
+            .await
+            .map_err(|_| GitError::Timeout { op, after: READ_DEADLINE })?
+            .map_err(|source| GitError::Io { op, source })?;
+        match line {
+            None => Ok(None),
+            Some(l) => {
+                self.seen += 1;
+                Oid::parse(l.trim()).map(Some).ok_or(GitError::Protocol { op, detail: format!("an id of {l:?}") })
+            }
+        }
+    }
+}
+
+impl Repo {
+    /// `rev-list <args>`, streamed.
+    pub async fn rev_walk(&self, args: &[&str]) -> Result<RevWalk, GitError> {
+        let mut a = vec!["rev-list"];
+        a.extend_from_slice(args);
+        let mut proc = self.spawn("rev-list", &a, &[], Limits::OPERATION, Pipes { stdin: false, stdout: true }).await?;
+        let out = proc.stdout().expect("piped");
+        // Its stderr is unused: a failed walk ends early, which the caller
+        // reads as ids not found.
+        drop(proc.stderr());
+        use tokio::io::AsyncBufReadExt as _;
+        Ok(RevWalk { _proc: proc, lines: tokio::io::BufReader::new(out).lines(), seen: 0 })
+    }
+}
