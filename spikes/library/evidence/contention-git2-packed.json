@@ -1,0 +1,48 @@
+{
+  "concurrent_16x20_one_branch": {
+    "attempts": 22177,
+    "commits_each": 20,
+    "commits_per_s": 10.21962745881043,
+    "files_present": 320,
+    "git_fsck_ok": true,
+    "history_len": 321,
+    "history_len_expected": 321,
+    "lost_updates": 0,
+    "ms": 31312.296,
+    "refused_locked": 19198,
+    "refused_moved": 2659,
+    "threads": 16
+  },
+  "machine": {
+    "cores": 32,
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "filesystem": "btrfs",
+    "git": "git version 2.55.0",
+    "kernel": "7.2.5-3-omarchy",
+    "libraries": {
+      "git2": "0.21.0",
+      "gix": "0.88.0",
+      "libgit2": "1.9.7 (vendored, static)"
+    },
+    "page_cache": "warm: every read follows its write; dropping caches needs root",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  },
+  "parallel_1x100_own_repos": {
+    "commits_each": 100,
+    "commits_per_s": 79.44016923933654,
+    "ms": 1258.809,
+    "threads": 1
+  },
+  "parallel_32x100_own_repos": {
+    "commits_each": 100,
+    "commits_per_s": 1006.0532969309716,
+    "ms": 3180.746,
+    "threads": 32
+  },
+  "parallel_8x100_own_repos": {
+    "commits_each": 100,
+    "commits_per_s": 286.5293594098928,
+    "ms": 2792.035,
+    "threads": 8
+  }
+}

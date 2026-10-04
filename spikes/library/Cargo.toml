@@ -1,0 +1,28 @@
+[package]
+name = "library-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "macrofiche's library spike: libgit2 (git2) against gitoxide (gix), with the git CLI as the reference (docs/library.md)"
+
+# Its own workspace root: this spike is a member of nothing.
+[workspace]
+
+# Versions are pinned exactly, as sandcastle pins its own.
+[dependencies]
+# libgit2 1.9.7, built from the crate's vendored source and linked
+# statically; no https or ssh transports (a server needs neither).
+git2 = { version = "=0.21.0", default-features = false, features = ["vendored-libgit2"] }
+# For GIT_OPT_ENABLE_FSYNC_GITDIR and the mempack's raw types, which
+# git2 does not wrap.
+libgit2-sys = { version = "=0.18.8", features = ["vendored"] }
+gix = { version = "=0.88.0", default-features = false, features = ["sha1", "merge", "revision", "max-performance-safe"] }
+# gix-pack's pack writer and indexer sit behind features gix leaves off.
+gix-pack = { version = "=0.75.0", default-features = false, features = ["generate", "streaming-input"] }
+libc = "=0.2.190"
+serde_json = "=1.0.151"
+
+[profile.release]
+debug = 1
+overflow-checks = true

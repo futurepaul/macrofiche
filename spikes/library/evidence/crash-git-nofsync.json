@@ -1,0 +1,34 @@
+{
+  "commits_on_main": "282",
+  "config": "git-nofsync",
+  "fsck_failures": [],
+  "machine": {
+    "cores": 32,
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "filesystem": "btrfs",
+    "git": "git version 2.55.0",
+    "kernel": "7.2.5-3-omarchy",
+    "libraries": {
+      "git2": "0.21.0",
+      "gix": "0.88.0",
+      "libgit2": "1.9.7 (vendored, static)"
+    },
+    "page_cache": "warm: every read follows its write; dropping caches needs root",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  },
+  "rounds": 40,
+  "stale_ref_lock_rounds": [],
+  "temp_files_example": [
+    "objects/db/tmp_obj_EMl3TJ",
+    "objects/f0/tmp_obj_I7tjeZ",
+    "objects/04/tmp_obj_7CLaS7",
+    "objects/46/tmp_obj_yl9dWw",
+    "objects/fa/tmp_obj_vc4m9K"
+  ],
+  "temp_files_left": 42,
+  "what": "kill -9 of a writer (its whole process group) committing a 1 MiB file and a counter in a loop, after 20 to 420 ms; then git fsck --full and refs/heads/main resolved. Process death only: the page cache survives, so this tests atomic renames and locks, not fsync.",
+  "writer_exits": {
+    "signal: 9 (SIGKILL)": 40
+  },
+  "writers_blocked_by_stale_lock": 0
+}

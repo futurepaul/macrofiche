@@ -1,0 +1,2125 @@
+{
+  "config": "git-nofsync",
+  "durable": false,
+  "machine": {
+    "cores": 32,
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "filesystem": "btrfs",
+    "git": "git version 2.55.0",
+    "kernel": "7.2.5-3-omarchy",
+    "libraries": {
+      "git2": "0.21.0",
+      "gix": "0.88.0",
+      "libgit2": "1.9.7 (vendored, static)"
+    },
+    "page_cache": "warm: every read follows its write; dropping caches needs root",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  },
+  "samples": [
+    {
+      "branch-ff": {
+        "baseline_vm_hwm_kib": 3952,
+        "create_ms": 1.297,
+        "ff_ms": 2.049,
+        "rss": {
+          "children_maxrss_kib": 4888,
+          "git_child_peak_rss_anon_kib": 100,
+          "git_child_peak_rss_file_kib": 1044,
+          "peak_rss_anon_kib": 516,
+          "peak_rss_file_kib": 4528,
+          "vm_hwm_kib": 5044
+        },
+        "stale_cas_ms": 1.699,
+        "step": "branch-ff"
+      },
+      "census-after-gc": {
+        "baseline_vm_hwm_kib": 3952,
+        "objects": {
+          "count": 0,
+          "deltified_objects": 2101,
+          "garbage": 0,
+          "in_pack": 3435,
+          "packed_objects": 3435,
+          "packs": 1,
+          "prune_packable": 0,
+          "size": 0,
+          "size_garbage": 0,
+          "size_pack": 51725
+        },
+        "repo_bytes": 53051927,
+        "rss": {
+          "children_maxrss_kib": 61064,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 944,
+          "peak_rss_file_kib": 3896,
+          "vm_hwm_kib": 4532
+        },
+        "step": "census-after-gc"
+      },
+      "census-before-gc": {
+        "baseline_vm_hwm_kib": 3960,
+        "objects": {
+          "count": 2424,
+          "deltified_objects": 980,
+          "garbage": 0,
+          "in_pack": 1014,
+          "packed_objects": 1014,
+          "packs": 2,
+          "prune_packable": 0,
+          "size": 9696,
+          "size_garbage": 0,
+          "size_pack": 51382
+        },
+        "repo_bytes": 55488798,
+        "rss": {
+          "children_maxrss_kib": 56092,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 632,
+          "peak_rss_file_kib": 3896,
+          "vm_hwm_kib": 4528
+        },
+        "step": "census-before-gc"
+      },
+      "commit-initial": {
+        "baseline_vm_hwm_kib": 3916,
+        "big_blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+        "big_write_ms": 683.046,
+        "commit": "fd4733addf3f447f71f4a81d161d10aab155de55",
+        "generator_ms": 20.035,
+        "ms": 695.844,
+        "rss": {
+          "children_maxrss_kib": 7704,
+          "git_child_peak_rss_anon_kib": 3092,
+          "git_child_peak_rss_file_kib": 4776,
+          "peak_rss_anon_kib": 2592,
+          "peak_rss_file_kib": 4372,
+          "vm_hwm_kib": 6004
+        },
+        "rss_after_big_write": {
+          "children_maxrss_kib": 4560,
+          "git_child_peak_rss_anon_kib": 768,
+          "git_child_peak_rss_file_kib": 4328,
+          "peak_rss_anon_kib": 1516,
+          "peak_rss_file_kib": 4244,
+          "vm_hwm_kib": 5756
+        },
+        "small_files_and_commit_ms": 12.749,
+        "step": "commit-initial"
+      },
+      "fsck": {
+        "baseline_vm_hwm_kib": 4024,
+        "git_fsck_ok": true,
+        "git_fsck_output": [],
+        "ids": {
+          "big": "e78ba6eac4272037830b195ca1a95a970172757f",
+          "c0": "fd4733addf3f447f71f4a81d161d10aab155de55",
+          "c200": "7af9a44b4c2bae6f2b015365248fcce9320da5c1",
+          "f1": "4592ee5a9ff43c3d7222c6cd2e170a3b5a8f72dd",
+          "m1": "fdaffb766e6b913210d8dff96f138ea7129d9afa",
+          "merge": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157"
+        },
+        "rss": {
+          "children_maxrss_kib": 61432,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 520,
+          "peak_rss_file_kib": 4088,
+          "vm_hwm_kib": 4608
+        },
+        "step": "fsck"
+      },
+      "gc": {
+        "baseline_vm_hwm_kib": 3956,
+        "gc": {
+          "deltas": "git gc (pack-objects, window 10, depth 50)",
+          "pack_ms": 169.35993499999998
+        },
+        "ms": 169.367,
+        "rss": {
+          "children_maxrss_kib": 66852,
+          "git_child_peak_rss_anon_kib": 256,
+          "git_child_peak_rss_file_kib": 4244,
+          "peak_rss_anon_kib": 476,
+          "peak_rss_file_kib": 4156,
+          "vm_hwm_kib": 4628
+        },
+        "step": "gc"
+      },
+      "history": {
+        "baseline_vm_hwm_kib": 4020,
+        "ms": 776.573,
+        "per_commit_ms": {
+          "max": 5.999,
+          "median": 3.594,
+          "p95": 4.822
+        },
+        "rss": {
+          "children_maxrss_kib": 7836,
+          "git_child_peak_rss_anon_kib": 2744,
+          "git_child_peak_rss_file_kib": 5124,
+          "peak_rss_anon_kib": 592,
+          "peak_rss_file_kib": 4604,
+          "vm_hwm_kib": 5196
+        },
+        "step": "history",
+        "tip": "7af9a44b4c2bae6f2b015365248fcce9320da5c1"
+      },
+      "init": {
+        "baseline_vm_hwm_kib": 3956,
+        "ms": 8.262,
+        "rss": {
+          "children_maxrss_kib": 4508,
+          "git_child_peak_rss_anon_kib": 64,
+          "git_child_peak_rss_file_kib": 548,
+          "peak_rss_anon_kib": 484,
+          "peak_rss_file_kib": 4220,
+          "vm_hwm_kib": 4700
+        },
+        "step": "init"
+      },
+      "last-commit": {
+        "baseline_vm_hwm_kib": 3944,
+        "commits_walked": 201,
+        "ms": 17.976,
+        "rss": {
+          "children_maxrss_kib": 5696,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 528,
+          "peak_rss_file_kib": 4276,
+          "vm_hwm_kib": 4804
+        },
+        "step": "last-commit"
+      },
+      "merge": {
+        "baseline_vm_hwm_kib": 4132,
+        "clean_merge_ms": 5.123,
+        "conflict_merge_ms": 2.611,
+        "merge_commit": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157",
+        "rss": {
+          "children_maxrss_kib": 7712,
+          "git_child_peak_rss_anon_kib": 2732,
+          "git_child_peak_rss_file_kib": 4912,
+          "peak_rss_anon_kib": 576,
+          "peak_rss_file_kib": 4588,
+          "vm_hwm_kib": 5164
+        },
+        "step": "merge"
+      },
+      "read": {
+        "baseline_vm_hwm_kib": 3956,
+        "big_read_method": "stream",
+        "big_read_ms": 43.806,
+        "hundred_small_reads_ms": 3.477,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.408,
+        "rss": {
+          "children_maxrss_kib": 55568,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 54864,
+          "peak_rss_anon_kib": 656,
+          "peak_rss_file_kib": 4412,
+          "vm_hwm_kib": 5068
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55568,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 54864,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4412,
+          "vm_hwm_kib": 4980
+        },
+        "step": "read"
+      },
+      "read-after-gc": {
+        "baseline_vm_hwm_kib": 4148,
+        "big_read_method": "stream",
+        "big_read_ms": 42.595,
+        "hundred_small_reads_ms": 3.418,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.34,
+        "rss": {
+          "children_maxrss_kib": 55892,
+          "git_child_peak_rss_anon_kib": 360,
+          "git_child_peak_rss_file_kib": 55380,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4536,
+          "vm_hwm_kib": 5196
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55892,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 55380,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4536,
+          "vm_hwm_kib": 5104
+        },
+        "step": "read-after-gc"
+      }
+    },
+    {
+      "branch-ff": {
+        "baseline_vm_hwm_kib": 4068,
+        "create_ms": 1.349,
+        "ff_ms": 2.425,
+        "rss": {
+          "children_maxrss_kib": 4908,
+          "git_child_peak_rss_anon_kib": 92,
+          "git_child_peak_rss_file_kib": 788,
+          "peak_rss_anon_kib": 512,
+          "peak_rss_file_kib": 4524,
+          "vm_hwm_kib": 5036
+        },
+        "stale_cas_ms": 1.706,
+        "step": "branch-ff"
+      },
+      "census-after-gc": {
+        "baseline_vm_hwm_kib": 3948,
+        "objects": {
+          "count": 0,
+          "deltified_objects": 2101,
+          "garbage": 0,
+          "in_pack": 3435,
+          "packed_objects": 3435,
+          "packs": 1,
+          "prune_packable": 0,
+          "size": 0,
+          "size_garbage": 0,
+          "size_pack": 51725
+        },
+        "repo_bytes": 53052124,
+        "rss": {
+          "children_maxrss_kib": 60816,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 940,
+          "peak_rss_file_kib": 3892,
+          "vm_hwm_kib": 4524
+        },
+        "step": "census-after-gc"
+      },
+      "census-before-gc": {
+        "baseline_vm_hwm_kib": 3952,
+        "objects": {
+          "count": 2424,
+          "deltified_objects": 980,
+          "garbage": 0,
+          "in_pack": 1014,
+          "packed_objects": 1014,
+          "packs": 2,
+          "prune_packable": 0,
+          "size": 9696,
+          "size_garbage": 0,
+          "size_pack": 51382
+        },
+        "repo_bytes": 55488798,
+        "rss": {
+          "children_maxrss_kib": 55952,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 628,
+          "peak_rss_file_kib": 3896,
+          "vm_hwm_kib": 4524
+        },
+        "step": "census-before-gc"
+      },
+      "commit-initial": {
+        "baseline_vm_hwm_kib": 3952,
+        "big_blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+        "big_write_ms": 697.098,
+        "commit": "fd4733addf3f447f71f4a81d161d10aab155de55",
+        "generator_ms": 20.037,
+        "ms": 709.848,
+        "rss": {
+          "children_maxrss_kib": 7504,
+          "git_child_peak_rss_anon_kib": 3072,
+          "git_child_peak_rss_file_kib": 4780,
+          "peak_rss_anon_kib": 2588,
+          "peak_rss_file_kib": 4408,
+          "vm_hwm_kib": 6040
+        },
+        "rss_after_big_write": {
+          "children_maxrss_kib": 4732,
+          "git_child_peak_rss_anon_kib": 776,
+          "git_child_peak_rss_file_kib": 4236,
+          "peak_rss_anon_kib": 1512,
+          "peak_rss_file_kib": 4152,
+          "vm_hwm_kib": 5660
+        },
+        "small_files_and_commit_ms": 12.696,
+        "step": "commit-initial"
+      },
+      "fsck": {
+        "baseline_vm_hwm_kib": 4144,
+        "git_fsck_ok": true,
+        "git_fsck_output": [],
+        "ids": {
+          "big": "e78ba6eac4272037830b195ca1a95a970172757f",
+          "c0": "fd4733addf3f447f71f4a81d161d10aab155de55",
+          "c200": "7af9a44b4c2bae6f2b015365248fcce9320da5c1",
+          "f1": "4592ee5a9ff43c3d7222c6cd2e170a3b5a8f72dd",
+          "m1": "fdaffb766e6b913210d8dff96f138ea7129d9afa",
+          "merge": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157"
+        },
+        "rss": {
+          "children_maxrss_kib": 61972,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 516,
+          "peak_rss_file_kib": 4212,
+          "vm_hwm_kib": 4728
+        },
+        "step": "fsck"
+      },
+      "gc": {
+        "baseline_vm_hwm_kib": 4212,
+        "gc": {
+          "deltas": "git gc (pack-objects, window 10, depth 50)",
+          "pack_ms": 171.75736899999998
+        },
+        "ms": 171.764,
+        "rss": {
+          "children_maxrss_kib": 67404,
+          "git_child_peak_rss_anon_kib": 384,
+          "git_child_peak_rss_file_kib": 5300,
+          "peak_rss_anon_kib": 476,
+          "peak_rss_file_kib": 4348,
+          "vm_hwm_kib": 4820
+        },
+        "step": "gc"
+      },
+      "history": {
+        "baseline_vm_hwm_kib": 4124,
+        "ms": 787.455,
+        "per_commit_ms": {
+          "max": 4.929,
+          "median": 3.601,
+          "p95": 4.781
+        },
+        "rss": {
+          "children_maxrss_kib": 7800,
+          "git_child_peak_rss_anon_kib": 2744,
+          "git_child_peak_rss_file_kib": 5128,
+          "peak_rss_anon_kib": 592,
+          "peak_rss_file_kib": 4584,
+          "vm_hwm_kib": 5176
+        },
+        "step": "history",
+        "tip": "7af9a44b4c2bae6f2b015365248fcce9320da5c1"
+      },
+      "init": {
+        "baseline_vm_hwm_kib": 3952,
+        "ms": 8.504,
+        "rss": {
+          "children_maxrss_kib": 4584,
+          "git_child_peak_rss_anon_kib": 92,
+          "git_child_peak_rss_file_kib": 720,
+          "peak_rss_anon_kib": 484,
+          "peak_rss_file_kib": 4284,
+          "vm_hwm_kib": 4764
+        },
+        "step": "init"
+      },
+      "last-commit": {
+        "baseline_vm_hwm_kib": 4212,
+        "commits_walked": 201,
+        "ms": 18.696,
+        "rss": {
+          "children_maxrss_kib": 5408,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 528,
+          "peak_rss_file_kib": 4416,
+          "vm_hwm_kib": 4944
+        },
+        "step": "last-commit"
+      },
+      "merge": {
+        "baseline_vm_hwm_kib": 4004,
+        "clean_merge_ms": 5.178,
+        "conflict_merge_ms": 2.661,
+        "merge_commit": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157",
+        "rss": {
+          "children_maxrss_kib": 7568,
+          "git_child_peak_rss_anon_kib": 2732,
+          "git_child_peak_rss_file_kib": 4824,
+          "peak_rss_anon_kib": 580,
+          "peak_rss_file_kib": 4460,
+          "vm_hwm_kib": 5040
+        },
+        "step": "merge"
+      },
+      "read": {
+        "baseline_vm_hwm_kib": 3956,
+        "big_read_method": "stream",
+        "big_read_ms": 42.524,
+        "hundred_small_reads_ms": 4.618,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.414,
+        "rss": {
+          "children_maxrss_kib": 56288,
+          "git_child_peak_rss_anon_kib": 352,
+          "git_child_peak_rss_file_kib": 55260,
+          "peak_rss_anon_kib": 656,
+          "peak_rss_file_kib": 4476,
+          "vm_hwm_kib": 5132
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 56288,
+          "git_child_peak_rss_anon_kib": 312,
+          "git_child_peak_rss_file_kib": 55260,
+          "peak_rss_anon_kib": 564,
+          "peak_rss_file_kib": 4476,
+          "vm_hwm_kib": 5040
+        },
+        "step": "read"
+      },
+      "read-after-gc": {
+        "baseline_vm_hwm_kib": 3956,
+        "big_read_method": "stream",
+        "big_read_ms": 42.663,
+        "hundred_small_reads_ms": 3.392,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.328,
+        "rss": {
+          "children_maxrss_kib": 55320,
+          "git_child_peak_rss_anon_kib": 364,
+          "git_child_peak_rss_file_kib": 55440,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4412,
+          "vm_hwm_kib": 5072
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55320,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 55440,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4412,
+          "vm_hwm_kib": 4980
+        },
+        "step": "read-after-gc"
+      }
+    },
+    {
+      "branch-ff": {
+        "baseline_vm_hwm_kib": 3944,
+        "create_ms": 1.305,
+        "ff_ms": 2.134,
+        "rss": {
+          "children_maxrss_kib": 4924,
+          "git_child_peak_rss_anon_kib": 52,
+          "git_child_peak_rss_file_kib": 596,
+          "peak_rss_anon_kib": 516,
+          "peak_rss_file_kib": 4524,
+          "vm_hwm_kib": 5040
+        },
+        "stale_cas_ms": 1.633,
+        "step": "branch-ff"
+      },
+      "census-after-gc": {
+        "baseline_vm_hwm_kib": 4148,
+        "objects": {
+          "count": 0,
+          "deltified_objects": 2101,
+          "garbage": 0,
+          "in_pack": 3435,
+          "packed_objects": 3435,
+          "packs": 1,
+          "prune_packable": 0,
+          "size": 0,
+          "size_garbage": 0,
+          "size_pack": 51725
+        },
+        "repo_bytes": 53051881,
+        "rss": {
+          "children_maxrss_kib": 60968,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 940,
+          "peak_rss_file_kib": 4024,
+          "vm_hwm_kib": 4656
+        },
+        "step": "census-after-gc"
+      },
+      "census-before-gc": {
+        "baseline_vm_hwm_kib": 3936,
+        "objects": {
+          "count": 2424,
+          "deltified_objects": 980,
+          "garbage": 0,
+          "in_pack": 1014,
+          "packed_objects": 1014,
+          "packs": 2,
+          "prune_packable": 0,
+          "size": 9696,
+          "size_garbage": 0,
+          "size_pack": 51382
+        },
+        "repo_bytes": 55488798,
+        "rss": {
+          "children_maxrss_kib": 55820,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 632,
+          "peak_rss_file_kib": 3812,
+          "vm_hwm_kib": 4444
+        },
+        "step": "census-before-gc"
+      },
+      "commit-initial": {
+        "baseline_vm_hwm_kib": 3956,
+        "big_blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+        "big_write_ms": 690.174,
+        "commit": "fd4733addf3f447f71f4a81d161d10aab155de55",
+        "generator_ms": 19.936,
+        "ms": 702.694,
+        "rss": {
+          "children_maxrss_kib": 7732,
+          "git_child_peak_rss_anon_kib": 3092,
+          "git_child_peak_rss_file_kib": 4636,
+          "peak_rss_anon_kib": 2588,
+          "peak_rss_file_kib": 4408,
+          "vm_hwm_kib": 6040
+        },
+        "rss_after_big_write": {
+          "children_maxrss_kib": 4296,
+          "git_child_peak_rss_anon_kib": 772,
+          "git_child_peak_rss_file_kib": 4064,
+          "peak_rss_anon_kib": 1512,
+          "peak_rss_file_kib": 4216,
+          "vm_hwm_kib": 5724
+        },
+        "small_files_and_commit_ms": 12.475,
+        "step": "commit-initial"
+      },
+      "fsck": {
+        "baseline_vm_hwm_kib": 3948,
+        "git_fsck_ok": true,
+        "git_fsck_output": [],
+        "ids": {
+          "big": "e78ba6eac4272037830b195ca1a95a970172757f",
+          "c0": "fd4733addf3f447f71f4a81d161d10aab155de55",
+          "c200": "7af9a44b4c2bae6f2b015365248fcce9320da5c1",
+          "f1": "4592ee5a9ff43c3d7222c6cd2e170a3b5a8f72dd",
+          "m1": "fdaffb766e6b913210d8dff96f138ea7129d9afa",
+          "merge": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157"
+        },
+        "rss": {
+          "children_maxrss_kib": 61868,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 520,
+          "peak_rss_file_kib": 4076,
+          "vm_hwm_kib": 4596
+        },
+        "step": "fsck"
+      },
+      "gc": {
+        "baseline_vm_hwm_kib": 3940,
+        "gc": {
+          "deltas": "git gc (pack-objects, window 10, depth 50)",
+          "pack_ms": 173.562664
+        },
+        "ms": 173.564,
+        "rss": {
+          "children_maxrss_kib": 66860,
+          "git_child_peak_rss_anon_kib": 964,
+          "git_child_peak_rss_file_kib": 5164,
+          "peak_rss_anon_kib": 476,
+          "peak_rss_file_kib": 4204,
+          "vm_hwm_kib": 4676
+        },
+        "step": "gc"
+      },
+      "history": {
+        "baseline_vm_hwm_kib": 4132,
+        "ms": 793.468,
+        "per_commit_ms": {
+          "max": 6.114,
+          "median": 3.608,
+          "p95": 4.825
+        },
+        "rss": {
+          "children_maxrss_kib": 7780,
+          "git_child_peak_rss_anon_kib": 2744,
+          "git_child_peak_rss_file_kib": 5128,
+          "peak_rss_anon_kib": 592,
+          "peak_rss_file_kib": 4592,
+          "vm_hwm_kib": 5184
+        },
+        "step": "history",
+        "tip": "7af9a44b4c2bae6f2b015365248fcce9320da5c1"
+      },
+      "init": {
+        "baseline_vm_hwm_kib": 4016,
+        "ms": 8.663,
+        "rss": {
+          "children_maxrss_kib": 4348,
+          "git_child_peak_rss_anon_kib": 132,
+          "git_child_peak_rss_file_kib": 988,
+          "peak_rss_anon_kib": 488,
+          "peak_rss_file_kib": 4276,
+          "vm_hwm_kib": 4760
+        },
+        "step": "init"
+      },
+      "last-commit": {
+        "baseline_vm_hwm_kib": 3960,
+        "commits_walked": 201,
+        "ms": 19.272,
+        "rss": {
+          "children_maxrss_kib": 5416,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 528,
+          "peak_rss_file_kib": 4288,
+          "vm_hwm_kib": 4816
+        },
+        "step": "last-commit"
+      },
+      "merge": {
+        "baseline_vm_hwm_kib": 3948,
+        "clean_merge_ms": 5.038,
+        "conflict_merge_ms": 2.638,
+        "merge_commit": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157",
+        "rss": {
+          "children_maxrss_kib": 7452,
+          "git_child_peak_rss_anon_kib": 2728,
+          "git_child_peak_rss_file_kib": 4780,
+          "peak_rss_anon_kib": 580,
+          "peak_rss_file_kib": 4524,
+          "vm_hwm_kib": 5104
+        },
+        "step": "merge"
+      },
+      "read": {
+        "baseline_vm_hwm_kib": 4144,
+        "big_read_method": "stream",
+        "big_read_ms": 42.484,
+        "hundred_small_reads_ms": 3.423,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.333,
+        "rss": {
+          "children_maxrss_kib": 55660,
+          "git_child_peak_rss_anon_kib": 320,
+          "git_child_peak_rss_file_kib": 55404,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4532,
+          "vm_hwm_kib": 5192
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55660,
+          "git_child_peak_rss_anon_kib": 320,
+          "git_child_peak_rss_file_kib": 55404,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4532,
+          "vm_hwm_kib": 5100
+        },
+        "step": "read"
+      },
+      "read-after-gc": {
+        "baseline_vm_hwm_kib": 3944,
+        "big_read_method": "stream",
+        "big_read_ms": 42.601,
+        "hundred_small_reads_ms": 3.406,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.463,
+        "rss": {
+          "children_maxrss_kib": 56068,
+          "git_child_peak_rss_anon_kib": 364,
+          "git_child_peak_rss_file_kib": 55300,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4336,
+          "vm_hwm_kib": 4996
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 56068,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 55300,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4336,
+          "vm_hwm_kib": 4904
+        },
+        "step": "read-after-gc"
+      }
+    },
+    {
+      "branch-ff": {
+        "baseline_vm_hwm_kib": 4132,
+        "create_ms": 1.408,
+        "ff_ms": 2.268,
+        "rss": {
+          "children_maxrss_kib": 4860,
+          "git_child_peak_rss_anon_kib": 72,
+          "git_child_peak_rss_file_kib": 720,
+          "peak_rss_anon_kib": 512,
+          "peak_rss_file_kib": 4596,
+          "vm_hwm_kib": 5108
+        },
+        "stale_cas_ms": 1.788,
+        "step": "branch-ff"
+      },
+      "census-after-gc": {
+        "baseline_vm_hwm_kib": 3956,
+        "objects": {
+          "count": 0,
+          "deltified_objects": 2103,
+          "garbage": 0,
+          "in_pack": 3435,
+          "packed_objects": 3435,
+          "packs": 1,
+          "prune_packable": 0,
+          "size": 0,
+          "size_garbage": 0,
+          "size_pack": 51720
+        },
+        "repo_bytes": 53047266,
+        "rss": {
+          "children_maxrss_kib": 61432,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 944,
+          "peak_rss_file_kib": 3896,
+          "vm_hwm_kib": 4532
+        },
+        "step": "census-after-gc"
+      },
+      "census-before-gc": {
+        "baseline_vm_hwm_kib": 3952,
+        "objects": {
+          "count": 2424,
+          "deltified_objects": 980,
+          "garbage": 0,
+          "in_pack": 1014,
+          "packed_objects": 1014,
+          "packs": 2,
+          "prune_packable": 0,
+          "size": 9696,
+          "size_garbage": 0,
+          "size_pack": 51382
+        },
+        "repo_bytes": 55488798,
+        "rss": {
+          "children_maxrss_kib": 55968,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 632,
+          "peak_rss_file_kib": 3892,
+          "vm_hwm_kib": 4524
+        },
+        "step": "census-before-gc"
+      },
+      "commit-initial": {
+        "baseline_vm_hwm_kib": 3956,
+        "big_blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+        "big_write_ms": 703.458,
+        "commit": "fd4733addf3f447f71f4a81d161d10aab155de55",
+        "generator_ms": 19.811,
+        "ms": 717.45,
+        "rss": {
+          "children_maxrss_kib": 7464,
+          "git_child_peak_rss_anon_kib": 3076,
+          "git_child_peak_rss_file_kib": 4632,
+          "peak_rss_anon_kib": 2592,
+          "peak_rss_file_kib": 4540,
+          "vm_hwm_kib": 6264
+        },
+        "rss_after_big_write": {
+          "children_maxrss_kib": 4836,
+          "git_child_peak_rss_anon_kib": 772,
+          "git_child_peak_rss_file_kib": 4116,
+          "peak_rss_anon_kib": 1516,
+          "peak_rss_file_kib": 4348,
+          "vm_hwm_kib": 5860
+        },
+        "small_files_and_commit_ms": 13.927,
+        "step": "commit-initial"
+      },
+      "fsck": {
+        "baseline_vm_hwm_kib": 3948,
+        "git_fsck_ok": true,
+        "git_fsck_output": [],
+        "ids": {
+          "big": "e78ba6eac4272037830b195ca1a95a970172757f",
+          "c0": "fd4733addf3f447f71f4a81d161d10aab155de55",
+          "c200": "7af9a44b4c2bae6f2b015365248fcce9320da5c1",
+          "f1": "4592ee5a9ff43c3d7222c6cd2e170a3b5a8f72dd",
+          "m1": "fdaffb766e6b913210d8dff96f138ea7129d9afa",
+          "merge": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157"
+        },
+        "rss": {
+          "children_maxrss_kib": 61588,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 516,
+          "peak_rss_file_kib": 4084,
+          "vm_hwm_kib": 4600
+        },
+        "step": "fsck"
+      },
+      "gc": {
+        "baseline_vm_hwm_kib": 3952,
+        "gc": {
+          "deltas": "git gc (pack-objects, window 10, depth 50)",
+          "pack_ms": 199.656697
+        },
+        "ms": 199.661,
+        "rss": {
+          "children_maxrss_kib": 66788,
+          "git_child_peak_rss_anon_kib": 260,
+          "git_child_peak_rss_file_kib": 4136,
+          "peak_rss_anon_kib": 476,
+          "peak_rss_file_kib": 4152,
+          "vm_hwm_kib": 4624
+        },
+        "step": "gc"
+      },
+      "history": {
+        "baseline_vm_hwm_kib": 4136,
+        "ms": 801.375,
+        "per_commit_ms": {
+          "max": 5.801,
+          "median": 3.624,
+          "p95": 4.821
+        },
+        "rss": {
+          "children_maxrss_kib": 7836,
+          "git_child_peak_rss_anon_kib": 2744,
+          "git_child_peak_rss_file_kib": 5100,
+          "peak_rss_anon_kib": 592,
+          "peak_rss_file_kib": 4656,
+          "vm_hwm_kib": 5248
+        },
+        "step": "history",
+        "tip": "7af9a44b4c2bae6f2b015365248fcce9320da5c1"
+      },
+      "init": {
+        "baseline_vm_hwm_kib": 3956,
+        "ms": 8.656,
+        "rss": {
+          "children_maxrss_kib": 4376,
+          "git_child_peak_rss_anon_kib": 48,
+          "git_child_peak_rss_file_kib": 596,
+          "peak_rss_anon_kib": 488,
+          "peak_rss_file_kib": 4408,
+          "vm_hwm_kib": 4892
+        },
+        "step": "init"
+      },
+      "last-commit": {
+        "baseline_vm_hwm_kib": 4000,
+        "commits_walked": 201,
+        "ms": 19.353,
+        "rss": {
+          "children_maxrss_kib": 5408,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 528,
+          "peak_rss_file_kib": 4268,
+          "vm_hwm_kib": 4796
+        },
+        "step": "last-commit"
+      },
+      "merge": {
+        "baseline_vm_hwm_kib": 4140,
+        "clean_merge_ms": 6.11,
+        "conflict_merge_ms": 2.844,
+        "merge_commit": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157",
+        "rss": {
+          "children_maxrss_kib": 7716,
+          "git_child_peak_rss_anon_kib": 2728,
+          "git_child_peak_rss_file_kib": 4916,
+          "peak_rss_anon_kib": 580,
+          "peak_rss_file_kib": 4596,
+          "vm_hwm_kib": 5176
+        },
+        "step": "merge"
+      },
+      "read": {
+        "baseline_vm_hwm_kib": 3940,
+        "big_read_method": "stream",
+        "big_read_ms": 45.043,
+        "hundred_small_reads_ms": 4.527,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.451,
+        "rss": {
+          "children_maxrss_kib": 55836,
+          "git_child_peak_rss_anon_kib": 356,
+          "git_child_peak_rss_file_kib": 55196,
+          "peak_rss_anon_kib": 656,
+          "peak_rss_file_kib": 4460,
+          "vm_hwm_kib": 5116
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55836,
+          "git_child_peak_rss_anon_kib": 320,
+          "git_child_peak_rss_file_kib": 55196,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4460,
+          "vm_hwm_kib": 5028
+        },
+        "step": "read"
+      },
+      "read-after-gc": {
+        "baseline_vm_hwm_kib": 3940,
+        "big_read_method": "stream",
+        "big_read_ms": 48.092,
+        "hundred_small_reads_ms": 4.817,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.621,
+        "rss": {
+          "children_maxrss_kib": 55964,
+          "git_child_peak_rss_anon_kib": 352,
+          "git_child_peak_rss_file_kib": 54940,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4396,
+          "vm_hwm_kib": 5056
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55964,
+          "git_child_peak_rss_anon_kib": 320,
+          "git_child_peak_rss_file_kib": 54940,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4396,
+          "vm_hwm_kib": 4964
+        },
+        "step": "read-after-gc"
+      }
+    },
+    {
+      "branch-ff": {
+        "baseline_vm_hwm_kib": 3912,
+        "create_ms": 1.351,
+        "ff_ms": 2.024,
+        "rss": {
+          "children_maxrss_kib": 4832,
+          "git_child_peak_rss_anon_kib": 60,
+          "git_child_peak_rss_file_kib": 560,
+          "peak_rss_anon_kib": 512,
+          "peak_rss_file_kib": 4436,
+          "vm_hwm_kib": 4948
+        },
+        "stale_cas_ms": 1.674,
+        "step": "branch-ff"
+      },
+      "census-after-gc": {
+        "baseline_vm_hwm_kib": 4080,
+        "objects": {
+          "count": 0,
+          "deltified_objects": 2102,
+          "garbage": 0,
+          "in_pack": 3435,
+          "packed_objects": 3435,
+          "packs": 1,
+          "prune_packable": 0,
+          "size": 0,
+          "size_garbage": 0,
+          "size_pack": 51722
+        },
+        "repo_bytes": 53049654,
+        "rss": {
+          "children_maxrss_kib": 60792,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 940,
+          "peak_rss_file_kib": 4024,
+          "vm_hwm_kib": 4656
+        },
+        "step": "census-after-gc"
+      },
+      "census-before-gc": {
+        "baseline_vm_hwm_kib": 3956,
+        "objects": {
+          "count": 2424,
+          "deltified_objects": 980,
+          "garbage": 0,
+          "in_pack": 1014,
+          "packed_objects": 1014,
+          "packs": 2,
+          "prune_packable": 0,
+          "size": 9696,
+          "size_garbage": 0,
+          "size_pack": 51382
+        },
+        "repo_bytes": 55488798,
+        "rss": {
+          "children_maxrss_kib": 55980,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 628,
+          "peak_rss_file_kib": 3832,
+          "vm_hwm_kib": 4460
+        },
+        "step": "census-before-gc"
+      },
+      "commit-initial": {
+        "baseline_vm_hwm_kib": 3940,
+        "big_blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+        "big_write_ms": 723.298,
+        "commit": "fd4733addf3f447f71f4a81d161d10aab155de55",
+        "generator_ms": 20.392,
+        "ms": 737.372,
+        "rss": {
+          "children_maxrss_kib": 7820,
+          "git_child_peak_rss_anon_kib": 3092,
+          "git_child_peak_rss_file_kib": 4712,
+          "peak_rss_anon_kib": 2592,
+          "peak_rss_file_kib": 4396,
+          "vm_hwm_kib": 6028
+        },
+        "rss_after_big_write": {
+          "children_maxrss_kib": 4436,
+          "git_child_peak_rss_anon_kib": 776,
+          "git_child_peak_rss_file_kib": 4236,
+          "peak_rss_anon_kib": 1516,
+          "peak_rss_file_kib": 4140,
+          "vm_hwm_kib": 5652
+        },
+        "small_files_and_commit_ms": 14.02,
+        "step": "commit-initial"
+      },
+      "fsck": {
+        "baseline_vm_hwm_kib": 4148,
+        "git_fsck_ok": true,
+        "git_fsck_output": [],
+        "ids": {
+          "big": "e78ba6eac4272037830b195ca1a95a970172757f",
+          "c0": "fd4733addf3f447f71f4a81d161d10aab155de55",
+          "c200": "7af9a44b4c2bae6f2b015365248fcce9320da5c1",
+          "f1": "4592ee5a9ff43c3d7222c6cd2e170a3b5a8f72dd",
+          "m1": "fdaffb766e6b913210d8dff96f138ea7129d9afa",
+          "merge": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157"
+        },
+        "rss": {
+          "children_maxrss_kib": 61836,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 520,
+          "peak_rss_file_kib": 4216,
+          "vm_hwm_kib": 4736
+        },
+        "step": "fsck"
+      },
+      "gc": {
+        "baseline_vm_hwm_kib": 4148,
+        "gc": {
+          "deltas": "git gc (pack-objects, window 10, depth 50)",
+          "pack_ms": 172.694156
+        },
+        "ms": 172.697,
+        "rss": {
+          "children_maxrss_kib": 67152,
+          "git_child_peak_rss_anon_kib": 440,
+          "git_child_peak_rss_file_kib": 5224,
+          "peak_rss_anon_kib": 476,
+          "peak_rss_file_kib": 4348,
+          "vm_hwm_kib": 4820
+        },
+        "step": "gc"
+      },
+      "history": {
+        "baseline_vm_hwm_kib": 3956,
+        "ms": 799.646,
+        "per_commit_ms": {
+          "max": 6.866,
+          "median": 3.611,
+          "p95": 4.854
+        },
+        "rss": {
+          "children_maxrss_kib": 7792,
+          "git_child_peak_rss_anon_kib": 2748,
+          "git_child_peak_rss_file_kib": 5348,
+          "peak_rss_anon_kib": 592,
+          "peak_rss_file_kib": 4596,
+          "vm_hwm_kib": 5188
+        },
+        "step": "history",
+        "tip": "7af9a44b4c2bae6f2b015365248fcce9320da5c1"
+      },
+      "init": {
+        "baseline_vm_hwm_kib": 4136,
+        "ms": 8.466,
+        "rss": {
+          "children_maxrss_kib": 4604,
+          "git_child_peak_rss_anon_kib": 56,
+          "git_child_peak_rss_file_kib": 592,
+          "peak_rss_anon_kib": 484,
+          "peak_rss_file_kib": 4272,
+          "vm_hwm_kib": 4752
+        },
+        "step": "init"
+      },
+      "last-commit": {
+        "baseline_vm_hwm_kib": 4108,
+        "commits_walked": 201,
+        "ms": 18.737,
+        "rss": {
+          "children_maxrss_kib": 5428,
+          "git_child_peak_rss_anon_kib": 0,
+          "git_child_peak_rss_file_kib": 0,
+          "peak_rss_anon_kib": 528,
+          "peak_rss_file_kib": 4376,
+          "vm_hwm_kib": 4904
+        },
+        "step": "last-commit"
+      },
+      "merge": {
+        "baseline_vm_hwm_kib": 3960,
+        "clean_merge_ms": 5.178,
+        "conflict_merge_ms": 2.758,
+        "merge_commit": "38ba83c9ff0e5b91a68ea2b9967d310fab2a5157",
+        "rss": {
+          "children_maxrss_kib": 7384,
+          "git_child_peak_rss_anon_kib": 2732,
+          "git_child_peak_rss_file_kib": 4840,
+          "peak_rss_anon_kib": 584,
+          "peak_rss_file_kib": 4540,
+          "vm_hwm_kib": 5124
+        },
+        "step": "merge"
+      },
+      "read": {
+        "baseline_vm_hwm_kib": 3960,
+        "big_read_method": "stream",
+        "big_read_ms": 42.734,
+        "hundred_small_reads_ms": 3.433,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.376,
+        "rss": {
+          "children_maxrss_kib": 55904,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 55392,
+          "peak_rss_anon_kib": 652,
+          "peak_rss_file_kib": 4472,
+          "vm_hwm_kib": 5124
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55904,
+          "git_child_peak_rss_anon_kib": 316,
+          "git_child_peak_rss_file_kib": 55392,
+          "peak_rss_anon_kib": 564,
+          "peak_rss_file_kib": 4472,
+          "vm_hwm_kib": 5036
+        },
+        "step": "read"
+      },
+      "read-after-gc": {
+        "baseline_vm_hwm_kib": 3936,
+        "big_read_method": "stream",
+        "big_read_ms": 42.688,
+        "hundred_small_reads_ms": 3.391,
+        "one_small_blob": "bfb053b024c8cee4a6b03bab043f9fe4bfe2c9cc",
+        "one_small_read_ms": 1.365,
+        "rss": {
+          "children_maxrss_kib": 55956,
+          "git_child_peak_rss_anon_kib": 364,
+          "git_child_peak_rss_file_kib": 55316,
+          "peak_rss_anon_kib": 660,
+          "peak_rss_file_kib": 4456,
+          "vm_hwm_kib": 5116
+        },
+        "rss_after_big_read": {
+          "children_maxrss_kib": 55956,
+          "git_child_peak_rss_anon_kib": 320,
+          "git_child_peak_rss_file_kib": 55316,
+          "peak_rss_anon_kib": 568,
+          "peak_rss_file_kib": 4456,
+          "vm_hwm_kib": 5024
+        },
+        "step": "read-after-gc"
+      }
+    }
+  ],
+  "summary": {
+    "branch-ff.baseline_vm_hwm_kib": {
+      "max": 4132.0,
+      "median": 3952.0,
+      "min": 3912.0,
+      "n": 5
+    },
+    "branch-ff.create_ms": {
+      "max": 1.408,
+      "median": 1.349,
+      "min": 1.297,
+      "n": 5
+    },
+    "branch-ff.ff_ms": {
+      "max": 2.425,
+      "median": 2.134,
+      "min": 2.024,
+      "n": 5
+    },
+    "branch-ff.rss.children_maxrss_kib": {
+      "max": 4924.0,
+      "median": 4888.0,
+      "min": 4832.0,
+      "n": 5
+    },
+    "branch-ff.rss.git_child_peak_rss_anon_kib": {
+      "max": 100.0,
+      "median": 72.0,
+      "min": 52.0,
+      "n": 5
+    },
+    "branch-ff.rss.git_child_peak_rss_file_kib": {
+      "max": 1044.0,
+      "median": 720.0,
+      "min": 560.0,
+      "n": 5
+    },
+    "branch-ff.rss.peak_rss_anon_kib": {
+      "max": 516.0,
+      "median": 512.0,
+      "min": 512.0,
+      "n": 5
+    },
+    "branch-ff.rss.peak_rss_file_kib": {
+      "max": 4596.0,
+      "median": 4524.0,
+      "min": 4436.0,
+      "n": 5
+    },
+    "branch-ff.rss.vm_hwm_kib": {
+      "max": 5108.0,
+      "median": 5040.0,
+      "min": 4948.0,
+      "n": 5
+    },
+    "branch-ff.stale_cas_ms": {
+      "max": 1.788,
+      "median": 1.699,
+      "min": 1.633,
+      "n": 5
+    },
+    "census-after-gc.baseline_vm_hwm_kib": {
+      "max": 4148.0,
+      "median": 3956.0,
+      "min": 3948.0,
+      "n": 5
+    },
+    "census-after-gc.objects.count": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.objects.deltified_objects": {
+      "max": 2103.0,
+      "median": 2101.0,
+      "min": 2101.0,
+      "n": 5
+    },
+    "census-after-gc.objects.garbage": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.objects.in_pack": {
+      "max": 3435.0,
+      "median": 3435.0,
+      "min": 3435.0,
+      "n": 5
+    },
+    "census-after-gc.objects.packed_objects": {
+      "max": 3435.0,
+      "median": 3435.0,
+      "min": 3435.0,
+      "n": 5
+    },
+    "census-after-gc.objects.packs": {
+      "max": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 5
+    },
+    "census-after-gc.objects.prune_packable": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.objects.size": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.objects.size_garbage": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.objects.size_pack": {
+      "max": 51725.0,
+      "median": 51725.0,
+      "min": 51720.0,
+      "n": 5
+    },
+    "census-after-gc.repo_bytes": {
+      "max": 53052124.0,
+      "median": 53051881.0,
+      "min": 53047266.0,
+      "n": 5
+    },
+    "census-after-gc.rss.children_maxrss_kib": {
+      "max": 61432.0,
+      "median": 60968.0,
+      "min": 60792.0,
+      "n": 5
+    },
+    "census-after-gc.rss.git_child_peak_rss_anon_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.rss.git_child_peak_rss_file_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-after-gc.rss.peak_rss_anon_kib": {
+      "max": 944.0,
+      "median": 940.0,
+      "min": 940.0,
+      "n": 5
+    },
+    "census-after-gc.rss.peak_rss_file_kib": {
+      "max": 4024.0,
+      "median": 3896.0,
+      "min": 3892.0,
+      "n": 5
+    },
+    "census-after-gc.rss.vm_hwm_kib": {
+      "max": 4656.0,
+      "median": 4532.0,
+      "min": 4524.0,
+      "n": 5
+    },
+    "census-before-gc.baseline_vm_hwm_kib": {
+      "max": 3960.0,
+      "median": 3952.0,
+      "min": 3936.0,
+      "n": 5
+    },
+    "census-before-gc.objects.count": {
+      "max": 2424.0,
+      "median": 2424.0,
+      "min": 2424.0,
+      "n": 5
+    },
+    "census-before-gc.objects.deltified_objects": {
+      "max": 980.0,
+      "median": 980.0,
+      "min": 980.0,
+      "n": 5
+    },
+    "census-before-gc.objects.garbage": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-before-gc.objects.in_pack": {
+      "max": 1014.0,
+      "median": 1014.0,
+      "min": 1014.0,
+      "n": 5
+    },
+    "census-before-gc.objects.packed_objects": {
+      "max": 1014.0,
+      "median": 1014.0,
+      "min": 1014.0,
+      "n": 5
+    },
+    "census-before-gc.objects.packs": {
+      "max": 2.0,
+      "median": 2.0,
+      "min": 2.0,
+      "n": 5
+    },
+    "census-before-gc.objects.prune_packable": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-before-gc.objects.size": {
+      "max": 9696.0,
+      "median": 9696.0,
+      "min": 9696.0,
+      "n": 5
+    },
+    "census-before-gc.objects.size_garbage": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-before-gc.objects.size_pack": {
+      "max": 51382.0,
+      "median": 51382.0,
+      "min": 51382.0,
+      "n": 5
+    },
+    "census-before-gc.repo_bytes": {
+      "max": 55488798.0,
+      "median": 55488798.0,
+      "min": 55488798.0,
+      "n": 5
+    },
+    "census-before-gc.rss.children_maxrss_kib": {
+      "max": 56092.0,
+      "median": 55968.0,
+      "min": 55820.0,
+      "n": 5
+    },
+    "census-before-gc.rss.git_child_peak_rss_anon_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-before-gc.rss.git_child_peak_rss_file_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "census-before-gc.rss.peak_rss_anon_kib": {
+      "max": 632.0,
+      "median": 632.0,
+      "min": 628.0,
+      "n": 5
+    },
+    "census-before-gc.rss.peak_rss_file_kib": {
+      "max": 3896.0,
+      "median": 3892.0,
+      "min": 3812.0,
+      "n": 5
+    },
+    "census-before-gc.rss.vm_hwm_kib": {
+      "max": 4528.0,
+      "median": 4524.0,
+      "min": 4444.0,
+      "n": 5
+    },
+    "commit-initial.baseline_vm_hwm_kib": {
+      "max": 3956.0,
+      "median": 3952.0,
+      "min": 3916.0,
+      "n": 5
+    },
+    "commit-initial.big_write_ms": {
+      "max": 723.298,
+      "median": 697.098,
+      "min": 683.046,
+      "n": 5
+    },
+    "commit-initial.generator_ms": {
+      "max": 20.392,
+      "median": 20.035,
+      "min": 19.811,
+      "n": 5
+    },
+    "commit-initial.ms": {
+      "max": 737.372,
+      "median": 709.848,
+      "min": 695.844,
+      "n": 5
+    },
+    "commit-initial.rss.children_maxrss_kib": {
+      "max": 7820.0,
+      "median": 7704.0,
+      "min": 7464.0,
+      "n": 5
+    },
+    "commit-initial.rss.git_child_peak_rss_anon_kib": {
+      "max": 3092.0,
+      "median": 3092.0,
+      "min": 3072.0,
+      "n": 5
+    },
+    "commit-initial.rss.git_child_peak_rss_file_kib": {
+      "max": 4780.0,
+      "median": 4712.0,
+      "min": 4632.0,
+      "n": 5
+    },
+    "commit-initial.rss.peak_rss_anon_kib": {
+      "max": 2592.0,
+      "median": 2592.0,
+      "min": 2588.0,
+      "n": 5
+    },
+    "commit-initial.rss.peak_rss_file_kib": {
+      "max": 4540.0,
+      "median": 4408.0,
+      "min": 4372.0,
+      "n": 5
+    },
+    "commit-initial.rss.vm_hwm_kib": {
+      "max": 6264.0,
+      "median": 6040.0,
+      "min": 6004.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.children_maxrss_kib": {
+      "max": 4836.0,
+      "median": 4560.0,
+      "min": 4296.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.git_child_peak_rss_anon_kib": {
+      "max": 776.0,
+      "median": 772.0,
+      "min": 768.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.git_child_peak_rss_file_kib": {
+      "max": 4328.0,
+      "median": 4236.0,
+      "min": 4064.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.peak_rss_anon_kib": {
+      "max": 1516.0,
+      "median": 1516.0,
+      "min": 1512.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.peak_rss_file_kib": {
+      "max": 4348.0,
+      "median": 4216.0,
+      "min": 4140.0,
+      "n": 5
+    },
+    "commit-initial.rss_after_big_write.vm_hwm_kib": {
+      "max": 5860.0,
+      "median": 5724.0,
+      "min": 5652.0,
+      "n": 5
+    },
+    "commit-initial.small_files_and_commit_ms": {
+      "max": 14.02,
+      "median": 12.749,
+      "min": 12.475,
+      "n": 5
+    },
+    "fsck.baseline_vm_hwm_kib": {
+      "max": 4148.0,
+      "median": 4024.0,
+      "min": 3948.0,
+      "n": 5
+    },
+    "fsck.rss.children_maxrss_kib": {
+      "max": 61972.0,
+      "median": 61836.0,
+      "min": 61432.0,
+      "n": 5
+    },
+    "fsck.rss.git_child_peak_rss_anon_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "fsck.rss.git_child_peak_rss_file_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "fsck.rss.peak_rss_anon_kib": {
+      "max": 520.0,
+      "median": 520.0,
+      "min": 516.0,
+      "n": 5
+    },
+    "fsck.rss.peak_rss_file_kib": {
+      "max": 4216.0,
+      "median": 4088.0,
+      "min": 4076.0,
+      "n": 5
+    },
+    "fsck.rss.vm_hwm_kib": {
+      "max": 4736.0,
+      "median": 4608.0,
+      "min": 4596.0,
+      "n": 5
+    },
+    "gc.baseline_vm_hwm_kib": {
+      "max": 4212.0,
+      "median": 3956.0,
+      "min": 3940.0,
+      "n": 5
+    },
+    "gc.gc.pack_ms": {
+      "max": 199.656697,
+      "median": 172.694156,
+      "min": 169.35993499999998,
+      "n": 5
+    },
+    "gc.ms": {
+      "max": 199.661,
+      "median": 172.697,
+      "min": 169.367,
+      "n": 5
+    },
+    "gc.rss.children_maxrss_kib": {
+      "max": 67404.0,
+      "median": 66860.0,
+      "min": 66788.0,
+      "n": 5
+    },
+    "gc.rss.git_child_peak_rss_anon_kib": {
+      "max": 964.0,
+      "median": 384.0,
+      "min": 256.0,
+      "n": 5
+    },
+    "gc.rss.git_child_peak_rss_file_kib": {
+      "max": 5300.0,
+      "median": 5164.0,
+      "min": 4136.0,
+      "n": 5
+    },
+    "gc.rss.peak_rss_anon_kib": {
+      "max": 476.0,
+      "median": 476.0,
+      "min": 476.0,
+      "n": 5
+    },
+    "gc.rss.peak_rss_file_kib": {
+      "max": 4348.0,
+      "median": 4204.0,
+      "min": 4152.0,
+      "n": 5
+    },
+    "gc.rss.vm_hwm_kib": {
+      "max": 4820.0,
+      "median": 4676.0,
+      "min": 4624.0,
+      "n": 5
+    },
+    "history.baseline_vm_hwm_kib": {
+      "max": 4136.0,
+      "median": 4124.0,
+      "min": 3956.0,
+      "n": 5
+    },
+    "history.ms": {
+      "max": 801.375,
+      "median": 793.468,
+      "min": 776.573,
+      "n": 5
+    },
+    "history.per_commit_ms.max": {
+      "max": 6.866,
+      "median": 5.999,
+      "min": 4.929,
+      "n": 5
+    },
+    "history.per_commit_ms.median": {
+      "max": 3.624,
+      "median": 3.608,
+      "min": 3.594,
+      "n": 5
+    },
+    "history.per_commit_ms.p95": {
+      "max": 4.854,
+      "median": 4.822,
+      "min": 4.781,
+      "n": 5
+    },
+    "history.rss.children_maxrss_kib": {
+      "max": 7836.0,
+      "median": 7800.0,
+      "min": 7780.0,
+      "n": 5
+    },
+    "history.rss.git_child_peak_rss_anon_kib": {
+      "max": 2748.0,
+      "median": 2744.0,
+      "min": 2744.0,
+      "n": 5
+    },
+    "history.rss.git_child_peak_rss_file_kib": {
+      "max": 5348.0,
+      "median": 5128.0,
+      "min": 5100.0,
+      "n": 5
+    },
+    "history.rss.peak_rss_anon_kib": {
+      "max": 592.0,
+      "median": 592.0,
+      "min": 592.0,
+      "n": 5
+    },
+    "history.rss.peak_rss_file_kib": {
+      "max": 4656.0,
+      "median": 4596.0,
+      "min": 4584.0,
+      "n": 5
+    },
+    "history.rss.vm_hwm_kib": {
+      "max": 5248.0,
+      "median": 5188.0,
+      "min": 5176.0,
+      "n": 5
+    },
+    "init.baseline_vm_hwm_kib": {
+      "max": 4136.0,
+      "median": 3956.0,
+      "min": 3952.0,
+      "n": 5
+    },
+    "init.ms": {
+      "max": 8.663,
+      "median": 8.504,
+      "min": 8.262,
+      "n": 5
+    },
+    "init.rss.children_maxrss_kib": {
+      "max": 4604.0,
+      "median": 4508.0,
+      "min": 4348.0,
+      "n": 5
+    },
+    "init.rss.git_child_peak_rss_anon_kib": {
+      "max": 132.0,
+      "median": 64.0,
+      "min": 48.0,
+      "n": 5
+    },
+    "init.rss.git_child_peak_rss_file_kib": {
+      "max": 988.0,
+      "median": 596.0,
+      "min": 548.0,
+      "n": 5
+    },
+    "init.rss.peak_rss_anon_kib": {
+      "max": 488.0,
+      "median": 484.0,
+      "min": 484.0,
+      "n": 5
+    },
+    "init.rss.peak_rss_file_kib": {
+      "max": 4408.0,
+      "median": 4276.0,
+      "min": 4220.0,
+      "n": 5
+    },
+    "init.rss.vm_hwm_kib": {
+      "max": 4892.0,
+      "median": 4760.0,
+      "min": 4700.0,
+      "n": 5
+    },
+    "last-commit.baseline_vm_hwm_kib": {
+      "max": 4212.0,
+      "median": 4000.0,
+      "min": 3944.0,
+      "n": 5
+    },
+    "last-commit.commits_walked": {
+      "max": 201.0,
+      "median": 201.0,
+      "min": 201.0,
+      "n": 5
+    },
+    "last-commit.ms": {
+      "max": 19.353,
+      "median": 18.737,
+      "min": 17.976,
+      "n": 5
+    },
+    "last-commit.rss.children_maxrss_kib": {
+      "max": 5696.0,
+      "median": 5416.0,
+      "min": 5408.0,
+      "n": 5
+    },
+    "last-commit.rss.git_child_peak_rss_anon_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "last-commit.rss.git_child_peak_rss_file_kib": {
+      "max": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 5
+    },
+    "last-commit.rss.peak_rss_anon_kib": {
+      "max": 528.0,
+      "median": 528.0,
+      "min": 528.0,
+      "n": 5
+    },
+    "last-commit.rss.peak_rss_file_kib": {
+      "max": 4416.0,
+      "median": 4288.0,
+      "min": 4268.0,
+      "n": 5
+    },
+    "last-commit.rss.vm_hwm_kib": {
+      "max": 4944.0,
+      "median": 4816.0,
+      "min": 4796.0,
+      "n": 5
+    },
+    "merge.baseline_vm_hwm_kib": {
+      "max": 4140.0,
+      "median": 4004.0,
+      "min": 3948.0,
+      "n": 5
+    },
+    "merge.clean_merge_ms": {
+      "max": 6.11,
+      "median": 5.178,
+      "min": 5.038,
+      "n": 5
+    },
+    "merge.conflict_merge_ms": {
+      "max": 2.844,
+      "median": 2.661,
+      "min": 2.611,
+      "n": 5
+    },
+    "merge.rss.children_maxrss_kib": {
+      "max": 7716.0,
+      "median": 7568.0,
+      "min": 7384.0,
+      "n": 5
+    },
+    "merge.rss.git_child_peak_rss_anon_kib": {
+      "max": 2732.0,
+      "median": 2732.0,
+      "min": 2728.0,
+      "n": 5
+    },
+    "merge.rss.git_child_peak_rss_file_kib": {
+      "max": 4916.0,
+      "median": 4840.0,
+      "min": 4780.0,
+      "n": 5
+    },
+    "merge.rss.peak_rss_anon_kib": {
+      "max": 584.0,
+      "median": 580.0,
+      "min": 576.0,
+      "n": 5
+    },
+    "merge.rss.peak_rss_file_kib": {
+      "max": 4596.0,
+      "median": 4540.0,
+      "min": 4460.0,
+      "n": 5
+    },
+    "merge.rss.vm_hwm_kib": {
+      "max": 5176.0,
+      "median": 5124.0,
+      "min": 5040.0,
+      "n": 5
+    },
+    "read-after-gc.baseline_vm_hwm_kib": {
+      "max": 4148.0,
+      "median": 3944.0,
+      "min": 3936.0,
+      "n": 5
+    },
+    "read-after-gc.big_read_ms": {
+      "max": 48.092,
+      "median": 42.663,
+      "min": 42.595,
+      "n": 5
+    },
+    "read-after-gc.hundred_small_reads_ms": {
+      "max": 4.817,
+      "median": 3.406,
+      "min": 3.391,
+      "n": 5
+    },
+    "read-after-gc.one_small_read_ms": {
+      "max": 1.621,
+      "median": 1.365,
+      "min": 1.328,
+      "n": 5
+    },
+    "read-after-gc.rss.children_maxrss_kib": {
+      "max": 56068.0,
+      "median": 55956.0,
+      "min": 55320.0,
+      "n": 5
+    },
+    "read-after-gc.rss.git_child_peak_rss_anon_kib": {
+      "max": 364.0,
+      "median": 364.0,
+      "min": 352.0,
+      "n": 5
+    },
+    "read-after-gc.rss.git_child_peak_rss_file_kib": {
+      "max": 55440.0,
+      "median": 55316.0,
+      "min": 54940.0,
+      "n": 5
+    },
+    "read-after-gc.rss.peak_rss_anon_kib": {
+      "max": 660.0,
+      "median": 660.0,
+      "min": 660.0,
+      "n": 5
+    },
+    "read-after-gc.rss.peak_rss_file_kib": {
+      "max": 4536.0,
+      "median": 4412.0,
+      "min": 4336.0,
+      "n": 5
+    },
+    "read-after-gc.rss.vm_hwm_kib": {
+      "max": 5196.0,
+      "median": 5072.0,
+      "min": 4996.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.children_maxrss_kib": {
+      "max": 56068.0,
+      "median": 55956.0,
+      "min": 55320.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.git_child_peak_rss_anon_kib": {
+      "max": 320.0,
+      "median": 316.0,
+      "min": 316.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.git_child_peak_rss_file_kib": {
+      "max": 55440.0,
+      "median": 55316.0,
+      "min": 54940.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.peak_rss_anon_kib": {
+      "max": 568.0,
+      "median": 568.0,
+      "min": 568.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.peak_rss_file_kib": {
+      "max": 4536.0,
+      "median": 4412.0,
+      "min": 4336.0,
+      "n": 5
+    },
+    "read-after-gc.rss_after_big_read.vm_hwm_kib": {
+      "max": 5104.0,
+      "median": 4980.0,
+      "min": 4904.0,
+      "n": 5
+    },
+    "read.baseline_vm_hwm_kib": {
+      "max": 4144.0,
+      "median": 3956.0,
+      "min": 3940.0,
+      "n": 5
+    },
+    "read.big_read_ms": {
+      "max": 45.043,
+      "median": 42.734,
+      "min": 42.484,
+      "n": 5
+    },
+    "read.hundred_small_reads_ms": {
+      "max": 4.618,
+      "median": 3.477,
+      "min": 3.423,
+      "n": 5
+    },
+    "read.one_small_read_ms": {
+      "max": 1.451,
+      "median": 1.408,
+      "min": 1.333,
+      "n": 5
+    },
+    "read.rss.children_maxrss_kib": {
+      "max": 56288.0,
+      "median": 55836.0,
+      "min": 55568.0,
+      "n": 5
+    },
+    "read.rss.git_child_peak_rss_anon_kib": {
+      "max": 356.0,
+      "median": 320.0,
+      "min": 316.0,
+      "n": 5
+    },
+    "read.rss.git_child_peak_rss_file_kib": {
+      "max": 55404.0,
+      "median": 55260.0,
+      "min": 54864.0,
+      "n": 5
+    },
+    "read.rss.peak_rss_anon_kib": {
+      "max": 660.0,
+      "median": 656.0,
+      "min": 652.0,
+      "n": 5
+    },
+    "read.rss.peak_rss_file_kib": {
+      "max": 4532.0,
+      "median": 4472.0,
+      "min": 4412.0,
+      "n": 5
+    },
+    "read.rss.vm_hwm_kib": {
+      "max": 5192.0,
+      "median": 5124.0,
+      "min": 5068.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.children_maxrss_kib": {
+      "max": 56288.0,
+      "median": 55836.0,
+      "min": 55568.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.git_child_peak_rss_anon_kib": {
+      "max": 320.0,
+      "median": 316.0,
+      "min": 312.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.git_child_peak_rss_file_kib": {
+      "max": 55404.0,
+      "median": 55260.0,
+      "min": 54864.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.peak_rss_anon_kib": {
+      "max": 568.0,
+      "median": 568.0,
+      "min": 564.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.peak_rss_file_kib": {
+      "max": 4532.0,
+      "median": 4472.0,
+      "min": 4412.0,
+      "n": 5
+    },
+    "read.rss_after_big_read.vm_hwm_kib": {
+      "max": 5100.0,
+      "median": 5036.0,
+      "min": 4980.0,
+      "n": 5
+    }
+  }
+}

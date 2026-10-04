@@ -1,0 +1,45 @@
+{
+  "commits_on_main": "351",
+  "config": "git2-packed",
+  "fsck_failures": [],
+  "machine": {
+    "cores": 32,
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "filesystem": "btrfs",
+    "git": "git version 2.55.0",
+    "kernel": "7.2.5-3-omarchy",
+    "libraries": {
+      "git2": "0.21.0",
+      "gix": "0.88.0",
+      "libgit2": "1.9.7 (vendored, static)"
+    },
+    "page_cache": "warm: every read follows its write; dropping caches needs root",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  },
+  "rounds": 40,
+  "stale_ref_lock_rounds": [
+    {
+      "killed_after_ms": 134,
+      "locks": [
+        "refs/heads/main.lock"
+      ],
+      "next_writer": "locked: failed to lock file '/home/futurepaul/dev/finite/macrofiche/spikes/library/target/runs/crash-git2-packed-1145437-1791079552884/repo.git/refs/heads/main.lock' for writing:",
+      "round": 23
+    },
+    {
+      "killed_after_ms": 29,
+      "locks": [
+        "refs/heads/main.lock"
+      ],
+      "next_writer": "locked: failed to lock file '/home/futurepaul/dev/finite/macrofiche/spikes/library/target/runs/crash-git2-packed-1145437-1791079552884/repo.git/refs/heads/main.lock' for writing:",
+      "round": 30
+    }
+  ],
+  "temp_files_example": [],
+  "temp_files_left": 0,
+  "what": "kill -9 of a writer (its whole process group) committing a 1 MiB file and a counter in a loop, after 20 to 420 ms; then git fsck --full and refs/heads/main resolved. Process death only: the page cache survives, so this tests atomic renames and locks, not fsync.",
+  "writer_exits": {
+    "signal: 9 (SIGKILL)": 40
+  },
+  "writers_blocked_by_stale_lock": 2
+}

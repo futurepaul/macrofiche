@@ -1,0 +1,26 @@
+{
+  "spool_then_odb_write_stream": {
+    "blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+    "ms": 410.03,
+    "rss": {
+      "children_maxrss_kib": 0,
+      "git_child_peak_rss_anon_kib": 0,
+      "git_child_peak_rss_file_kib": 0,
+      "peak_rss_anon_kib": 1220,
+      "peak_rss_file_kib": 6588,
+      "vm_hwm_kib": 7524
+    }
+  },
+  "write_blob_stream": {
+    "blob": "e78ba6eac4272037830b195ca1a95a970172757f",
+    "ms": 387.847,
+    "rss": {
+      "children_maxrss_kib": 0,
+      "git_child_peak_rss_anon_kib": 0,
+      "git_child_peak_rss_file_kib": 0,
+      "peak_rss_anon_kib": 66748,
+      "peak_rss_file_kib": 6464,
+      "vm_hwm_kib": 72872
+    }
+  }
+}

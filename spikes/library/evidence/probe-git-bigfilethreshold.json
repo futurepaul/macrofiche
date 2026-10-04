@@ -1,0 +1,36 @@
+{
+  "core.bigFileThreshold=1m": {
+    "cat_file_peak_rss_anon_kib": 316,
+    "cat_file_peak_rss_file_kib": 55296,
+    "census": {
+      "count": 0,
+      "deltified_objects": 0,
+      "garbage": 0,
+      "in_pack": 4,
+      "packed_objects": 4,
+      "packs": 1,
+      "prune_packable": 0,
+      "size": 0,
+      "size_garbage": 0,
+      "size_pack": 51217
+    },
+    "read_ms": 42.644
+  },
+  "core.bigFileThreshold=512m": {
+    "cat_file_peak_rss_anon_kib": 51496,
+    "cat_file_peak_rss_file_kib": 55796,
+    "census": {
+      "count": 0,
+      "deltified_objects": 0,
+      "garbage": 0,
+      "in_pack": 4,
+      "packed_objects": 4,
+      "packs": 1,
+      "prune_packable": 0,
+      "size": 0,
+      "size_garbage": 0,
+      "size_pack": 51217
+    },
+    "read_ms": 47.988
+  }
+}
