@@ -11,8 +11,9 @@
 
 ## Summary
 
-macrofiche answers twelve HTTP routes and sends one webhook. That is all
-of code.storage that fragment uses.
+macrofiche answers thirteen HTTP routes and sends one webhook. That is
+all of code.storage that fragment uses: the twelve of section 5, and the
+merge preview that fragment PR #127 adds (section 15).
 
 - Every client speaks REST over HTTPS with a bearer JWT. Nothing in
   fragment speaks git's smart-HTTP protocol: no clone, fetch or push, no
@@ -785,9 +786,9 @@ then gets raw bytes of any size.
 | problem body | no `code`, no `title` | `code`, `title` | service |
 | commit ids | synthetic SHA-1 of a counter; `tree_sha` = commit sha | real git | real git |
 | `last_commit_sha` | last write, unchanged bytes included | git's rule | git's |
-| merge when diverged | merge commit with the source's tree | a real merge; 409 on conflict | question 3 |
+| merge when diverged | merge commit with the source's tree (git's three-way merge after PR #127) | a real merge; 409 on conflict | service (section 15) |
 | restore commit parents | old tip and base | not documented | old tip only |
-| restore to the tip, or with no change | 201 | 412 | service |
+| restore to the tip, or with no change | 201 (412 after PR #127) | 412 | service |
 | commit history | first parents, `limit` 30 | date order, `limit` 20 | question 4 |
 | ephemeral refs | flagged in the branch map | own namespace | service |
 | `files/metadata` default `limit` | 1000 | 200 | service |
@@ -891,6 +892,9 @@ skips each check that reads the fake (`crates/e2e/src/main.rs:536-592`,
    which fragment reads as "live moved" and retries until the deploy
    fails. e2e `deploy` does not look at a file the rollback reverted
    after the next deploy.
+   *Settled by fragment PR #127 (section 15): the service's three-way
+   merge. A deploy previews the merge, and uses restore commits where a
+   merge alone would keep a rollback's reverts.*
 4. **Commit history order.** First parents, as the fake (what
    `rollback`'s default target assumes), or commit-date order over every
    reachable commit, as the service? They agree on linear history.
@@ -908,3 +912,93 @@ skips each check that reads the fake (`crates/e2e/src/main.rs:536-592`,
 8. **Unsigned mode.** The CLI's unit tests run the fake with no key.
    Does macrofiche need a dev mode that accepts any bearer, or do those
    tests keep the fake?
+
+## 15. The merge preview (from fragment PR #127)
+
+> Read on 2026-10-03 from fragment PR #127 (branch
+> `claude/deploy-after-rollback`, commit `5d784b3`) and from
+> code.storage's OpenAPI (`repos-previewMerge`, `ReposPreviewMergeResponse`,
+> `ReposMergeRequest`, `MergeConflict`, `ReposCommitsRestoreResponse`).
+> Paths here are that branch's.
+
+PR #127 makes a deploy after a rollback serve main against the service's
+three-way merge. Merging main into a `live` that holds a rollback's
+restore commit does nothing while main is unchanged (`no_op`), keeps what
+the rollback reverted once main moves on, and conflicts where main
+changed a file the rollback reverted. So a deploy no longer merges blind.
+It previews the merge, and follows `fragment_core::codestorage::Promotion`
+(`crates/core/src/codestorage.rs`):
+
+| The preview answers | The deploy does |
+|---|---|
+| `source_tip_sha` = `target_tip_sha` | nothing (`Current`) |
+| `result: fast_forward` | 5.10, which fast-forwards |
+| `result: no_op` (main is in live: a rollback, main unchanged since) | 5.11, a restore commit of main's tip; a 412 is "live's files are main's already" when live has not moved |
+| `result: merge_commit` (diverged: a rollback, then main moved) | 5.11, a restore commit of the merge base, then 5.10, which takes main's side of every path; a 412 from the restore is "no change" |
+
+Every step carries the `live` the preview read as `expected_target_sha`.
+The cell holds its plane lock across the steps (`cell/src/publish.rs:85-106`);
+the CLI cannot (`cli/src/main.rs:1772`).
+
+### 15.1 `GET /api/repos/{repo}/merge/preview`: what a merge would do
+
+- **Scope:** `git:read`.
+- **Callers:** the cell's `promote_live` (`cell/src/cs.rs`, behind the
+  deploy API and template seeding) and the CLI's `promote_live`
+  (`cli/src/codestorage.rs`, behind `deploy`).
+- **Query:** `source_branch=main&target_branch=live`, always
+  (`DEPLOY_PREVIEW_QUERY`). The service also takes `source_is_ephemeral`,
+  `target_is_ephemeral` and `include_content`; fragment sends none.
+- **200:** a conflicted preview is 200 too, with `status: conflicted`.
+
+```json
+{"status": "clean", "result": "merge_commit",
+ "source_branch": "main", "target_branch": "live",
+ "source_tip_sha": "<40 hex>", "target_tip_sha": "<40 hex>",
+ "merge_base_sha": "<40 hex>", "conflict_paths": [], "conflicts": []}
+```
+
+  - `status` is `clean` or `conflicted`; `result` is `merge_commit`,
+    `fast_forward` or `no_op`.
+  - `conflicts` holds inline blobs (`path`, and `base`, `ours`, `theirs`,
+    `result`, each `{oid, content, binary, truncated}`) only with
+    `include_content=true`; `filtered_conflicts` names those left out.
+  - `merge_base_sha` is git's merge base: the source's tip for `no_op`,
+    the target's for `fast_forward`.
+- **What fragment reads** (`promotion`): `target_tip_sha` and
+  `source_tip_sha`, each 40 hex; `result`; and `merge_base_sha`, 40 hex,
+  when `result` is `merge_commit`. Anything else fails the deploy as a
+  malformed answer.
+- **404:** either branch is absent. **400:** unrelated histories (the
+  fake's reading).
+- **Semantics:** it writes nothing and moves no ref.
+
+### 15.2 What fragment now relies on in 5.10 and 5.11
+
+- **Merge (5.10)**, the service's semantics:
+  - `strategy` is `merge`, `ff_only` or `ff_prefer`. Fragment sends
+    `ff_prefer`: fast-forward when it can, else a merge commit.
+  - `no_op` when the target holds the source already; a fast-forward
+    when the source holds the target; else git's three-way merge from
+    the merge base.
+  - 409 has its own body, `MergeConflict`:
+    `{"error", "conflict_type", "conflict_paths", "merge_base_sha"}`.
+    `conflict_type` is `merge_conflict` (the sides conflict),
+    `target_moved` (a stale `expected_target_sha`), or `repo_changed`.
+    Fragment tells a conflict from a moved `live` with `merge_conflicted`
+    (`conflict_type` or `code` equal to `merge_conflict`), and fails a
+    conflict instead of retrying it.
+  - The answer's `target.new_sha` is still what fragment reads.
+- **Restore (5.11)**, now also called by every deploy after a rollback:
+  - 412 when the branch already points at `base_ref`, when `base_ref` is
+    not an ancestor of the tip (an unknown one included), or when the
+    restore would change nothing (equal trees). The body is the restore
+    result with `result.status` `precondition_failed`.
+  - A deploy reads that 412 as "no change"; `rollback` still reports it
+    as `Precondition`.
+  - The deploy's first step after a rollback carries the message
+    `<deploy message> (first, live back to <12 hex>: the last of main it holds)`
+    (`back_to_base_message`).
+- **The checklist (section 12) gains a row:** 15.1, the cell's deploy API
+  and template seeding, the CLI's `deploy`; e2e `deploy` now looks at the
+  page a rollback reverted after the next deploy.
