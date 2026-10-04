@@ -2,7 +2,7 @@
   "phase": "P3/P4, fragment's own e2e against macrofiche",
   "date": "2026-10-03",
   "how": "in fragment's worktree on branch selfhost-macrofiche (fragment-macrofiche): FRAGMENT_E2E_RUNTIME=celld CELLD_BIN=\u2026/celld CHROME_BIN=/usr/bin/chromium FRAGMENT_E2E_CODESTORE=macrofiche MACROFICHE_BIN=target/release/macrofiche cargo xtask e2e --only codestore,create,deploy,files,sync",
-  "macrofiche_commit": "7e200e5",
+  "macrofiche_commit": "7e200e5, and again at c4b6de9 (after the half-close fix, detached writes, and smart HTTP): the same result",
   "summary": "123 passed, 0 failed, 6 skipped (each says why)",
   "sections": {
     "create": {
@@ -149,6 +149,16 @@
       "section": "sync",
       "result": "skip",
       "check": "a webhook brings the poll back to its interval too: no code store outside the run announces a commit by webhook: none registers the cell's (macrofiche's contract, question 2), so refresh and the poll move the pins"
+    }
+  ],
+  "runs": [
+    {
+      "commit": "7e200e5",
+      "summary": "123 passed, 0 failed, 6 skipped (each says why)"
+    },
+    {
+      "commit": "c4b6de9",
+      "summary": "123 passed, 0 failed, 6 skipped (each says why)"
     }
   ]
 }
