@@ -18,26 +18,33 @@ async fn store() -> (Arc<Store>, PathBuf) {
     (s, root)
 }
 
-/// One upsert's bytes spooled, or a delete.
+/// One upsert's bytes spooled (`Exe`'s as `100755`), or a delete.
 enum F<'a> {
     Up(&'a str, &'a [u8]),
+    Exe(&'a str, &'a [u8]),
     Del(&'a str),
 }
 
 static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 async fn pack(r: &RepoHandle, root: &Path, branch: &str, expected: Expected, files: &[F<'_>], t: i64) -> CommitOutcome {
+    pack_on(r, root, branch, None, expected, files, t).await
+}
+
+/// A pack whose branch, when absent, is made from `base` (`base_branch`).
+async fn pack_on(r: &RepoHandle, root: &Path, branch: &str, base: Option<&str>, expected: Expected, files: &[F<'_>], t: i64) -> CommitOutcome {
     let spool = root.join(format!("spool-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
     std::fs::create_dir_all(&spool).unwrap();
     let mut ops = Vec::new();
     let mut pf = Vec::new();
     for (i, f) in files.iter().enumerate() {
         match f {
-            F::Up(p, b) => {
+            F::Up(p, b) | F::Exe(p, b) => {
+                let mode = if matches!(f, F::Exe(..)) { 0o100755 } else { 0o100644 };
                 let s = spool.join(i.to_string());
                 std::fs::write(&s, b).unwrap();
-                ops.push(FileOp { path: p.to_string(), op: Op::Upsert { content_id: format!("c{i}"), mode: 0o100644 } });
-                pf.push(PackFile { path: p.to_string(), change: PackChange::Upsert { mode: 0o100644, spool: s, len: b.len() as u64 } });
+                ops.push(FileOp { path: p.to_string(), op: Op::Upsert { content_id: format!("c{i}"), mode } });
+                pf.push(PackFile { path: p.to_string(), change: PackChange::Upsert { mode, spool: s, len: b.len() as u64 } });
             }
             F::Del(p) => {
                 ops.push(FileOp { path: p.to_string(), op: Op::Delete });
@@ -45,7 +52,8 @@ async fn pack(r: &RepoHandle, root: &Path, branch: &str, expected: Expected, fil
             }
         }
     }
-    let meta = Metadata { target_branch: branch.into(), expected, message: format!("commit at {t}"), author: None, committer: None, files: ops, base_branch: None, ephemeral: false, base_is_ephemeral: false };
+    let base_branch = base.map(str::to_string);
+    let meta = Metadata { target_branch: branch.into(), expected, message: format!("commit at {t}"), author: None, committer: None, files: ops, base_branch, ephemeral: false, base_is_ephemeral: false };
     r.commit_pack(&meta, &pf, None, None, t).await.unwrap().0
 }
 
@@ -55,6 +63,7 @@ async fn commit(r: &RepoHandle, root: &Path, branch: &str, files: &[F<'_>], t: i
     match pack(r, root, branch, exp, files, t).await {
         CommitOutcome::Committed(c) => c.new,
         CommitOutcome::Moved { .. } => panic!("moved"),
+        CommitOutcome::Unchanged { .. } => panic!("changed nothing"),
     }
 }
 
@@ -139,6 +148,89 @@ async fn commit_packs_and_the_cas() {
     assert_eq!(r.resolve("a..b", false).await.unwrap(), None);
     let fsck = r.git.fsck().await.unwrap();
     assert!(fsck.ok, "{}", fsck.stderr);
+}
+
+// Goal: a pack that changes nothing is refused (the service's 412, `no
+// changes to commit`), never an empty commit, after the compare-and-swap
+// as the fake orders the two; what changes anything commits, a mode
+// included (git's tree: the fake compares bytes); a squash that adds
+// nothing is refused the same way, a merge commit is not (git's); and
+// the refusals leave no temporary ref and a whole repository, across a
+// reopen. Method: packs on a seeded main (its bytes, a delete of nothing,
+// no files, the whole tree again, each stale too), packs that would make
+// a branch (deletes only, a base's own bytes), merges of a branch holding
+// main's change, then a reopen, the replay, a write, fsck.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pack_that_changes_nothing_is_refused() {
+    let (s, root) = store().await;
+    s.create_repo("o", "r", "main", 1).await.unwrap();
+    let r = s.repo("o", "r").await.unwrap();
+    let t0 = 1_790_000_000;
+    let c1 = commit(&r, &root, "main", &[F::Up("a", b"1"), F::Up("dir/b", b"2")], t0).await;
+    let refused = |o: CommitOutcome, tip: Option<Oid>| matches!(o, CommitOutcome::Unchanged { tip: t } if t == tip);
+    let at = |c: Oid| Expected::At(c.to_string());
+    assert!(refused(pack(&r, &root, "main", at(c1), &[F::Up("a", b"1")], t0 + 1).await, Some(c1)), "the bytes main holds");
+    assert!(refused(pack(&r, &root, "main", at(c1), &[F::Del("nope")], t0 + 1).await, Some(c1)), "a delete of what is not there");
+    assert!(refused(pack(&r, &root, "main", at(c1), &[], t0 + 1).await, Some(c1)), "no files");
+    assert!(refused(pack(&r, &root, "main", Expected::Any, &[F::Up("dir/b", b"2"), F::Up("a", b"1"), F::Del("dir/c")], t0 + 1).await, Some(c1)), "the whole tree again, expecting nothing");
+    // the compare-and-swap first: a stale pack is 409 however little it changes
+    let stale = Expected::At("0123456789abcdef0123456789abcdef01234567".into());
+    assert!(matches!(pack(&r, &root, "main", stale, &[F::Up("a", b"1")], t0 + 1).await, CommitOutcome::Moved { current: Some(c) } if c == c1));
+    assert!(matches!(pack(&r, &root, "main", Expected::Absent, &[F::Up("a", b"1")], t0 + 1).await, CommitOutcome::Moved { current: Some(c) } if c == c1));
+    assert_eq!(r.branch("main", false).await.unwrap(), Some(c1), "nothing moved");
+    assert_eq!(r.history(c1, 0, 10).await.unwrap().0.len(), 1, "no empty commit");
+    // on a branch it would make: deletes alone leave the empty tree, and a
+    // base's own bytes leave the base's
+    assert!(refused(pack(&r, &root, "fresh", Expected::Absent, &[F::Del("x")], t0 + 2).await, None), "deletes only, on no branch");
+    assert!(refused(pack_on(&r, &root, "topic", Some("main"), Expected::Absent, &[F::Up("a", b"1")], t0 + 2).await, None), "a base's own bytes");
+    assert_eq!((r.branch("fresh", false).await.unwrap(), r.branch("topic", false).await.unwrap()), (None, None), "no branch made");
+    // what changes anything commits: a mode, then an empty file
+    let CommitOutcome::Committed(c2) = pack(&r, &root, "main", at(c1), &[F::Exe("a", b"1")], t0 + 3).await else { panic!("a mode is a change") };
+    let mode = r.listing(c2.new).await.unwrap().entries.iter().find(|e| e.path == "a").map(|e| e.mode);
+    assert_eq!(mode, Some(0o100755));
+    assert!(refused(pack(&r, &root, "main", at(c2.new), &[F::Exe("a", b"1")], t0 + 4).await, Some(c2.new)), "the same mode again");
+    let c3 = commit(&r, &root, "main", &[F::Up("empty", b"")], t0 + 5).await;
+    agrees_with_git(&r, c3).await;
+    // a branch from c1 that adds main's own empty file: squashing it adds
+    // nothing (refused), merging it is a merge commit with main's tree
+    r.create_branch("side", false, &c1.to_string(), false, t0).await.unwrap();
+    let side = commit(&r, &root, "side", &[F::Up("empty", b"")], t0 + 6).await;
+    let merge = |squash: bool, expected: Oid| MergeRequest {
+        target: "main".into(),
+        target_ephemeral: false,
+        source: "side".into(),
+        source_ephemeral: false,
+        strategy: Strategy::FfPrefer,
+        expected: Some(expected),
+        message: "merge side".into(),
+        author: None,
+        committer: None,
+        squash,
+        allow_unrelated: false,
+    };
+    assert!(matches!(r.merge(merge(true, c3), t0 + 7).await.unwrap(), (MergeOutcome::Unchanged { current }, None) if current == c3), "a squash that adds nothing");
+    assert_eq!(r.branch("main", false).await.unwrap(), Some(c3), "and moves nothing");
+    let MergeOutcome::Done(m) = r.merge(merge(false, c3), t0 + 8).await.unwrap().0 else { panic!("a merge commit") };
+    let c3_tree = r.commit_info(c3).await.unwrap().tree;
+    assert_eq!((m.kind, r.commit_info(m.new).await.unwrap().parents.clone(), m.tree), (MergeKind::MergeCommit, vec![c3, side], c3_tree));
+    commit(&r, &root, "side", &[F::Up("g", b"g")], t0 + 9).await;
+    let MergeOutcome::Done(q) = r.merge(merge(true, m.new), t0 + 10).await.unwrap().0 else { panic!("a squash that adds g") };
+    assert_eq!((q.kind, r.commit_info(q.new).await.unwrap().parents.clone()), (MergeKind::Squash, vec![m.new]));
+    agrees_with_git(&r, q.new).await;
+    // no refusal left a temporary ref; a reopen clears nothing, and the
+    // replay is refused again before a change lands
+    let refs = r.git.run("for-each-ref", &["for-each-ref", "refs/macrofiche/"], RunOpts::read()).await.unwrap();
+    assert!(refs.stdout.is_empty(), "temporary refs left: {}", String::from_utf8_lossy(&refs.stdout));
+    assert!(r.git.fsck().await.unwrap().ok);
+    drop((r, s));
+    let (s, rec) = Store::open(root.join("state"), Settings::linux(macrofiche_testkit::git_prefix())).await.unwrap();
+    assert_eq!((rec.temp_refs, rec.locks, rec.temp_files), (0, 0, 0), "a refusal leaves nothing to clear");
+    let r = s.repo("o", "r").await.unwrap();
+    assert_eq!(r.branch("main", false).await.unwrap(), Some(q.new));
+    assert!(refused(pack(&r, &root, "main", at(q.new), &[F::Up("g", b"g")], t0 + 11).await, Some(q.new)), "the replay, after a reopen");
+    let c4 = commit(&r, &root, "main", &[F::Up("g", b"g2")], t0 + 12).await;
+    assert_eq!(r.commit_info(c4).await.unwrap().parents, vec![q.new]);
+    assert!(r.git.fsck().await.unwrap().ok);
 }
 
 // Goal: last commits are git's through merges, restores and fast-forwards,

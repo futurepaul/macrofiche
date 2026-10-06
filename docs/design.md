@@ -40,7 +40,9 @@ evidence and debt.
 - **The service's semantics** where the fake and the service differ:
   `url` is the repo's name, statuses and problem bodies are the
   service's, merges are git's three-way merge with 409 `merge_conflict`,
-  restore refuses with 412, history is in commit-date order.
+  restore refuses with 412, a commit that would change nothing is
+  refused with 412 (`no changes to commit`), history is in commit-date
+  order.
 
 ## How a request flows
 
@@ -117,7 +119,7 @@ jail's memory limit.
 | Signatures | `ring` (ECDSA P-256 verify, HMAC-SHA256, random ids) | already in sandcastle's tree through rustls; one crypto library |
 | Commit time | the server's clock, `+0000` | contract 5.8 |
 | Repo identity | `url` = `repo_name`; `repo_id` a random id | the service (question 1) |
-| Write order | spool, then lock, then `fast-import`, then the index record (fsynced), then `update-ref` (CAS), then answer | the client's upload never holds the lock; an acknowledged commit always has its record |
+| Write order | spool, then lock, then `fast-import`, then the no-change check (412), then the index record (fsynced), then `update-ref` (CAS), then answer | the client's upload never holds the lock; an acknowledged commit always has its record |
 | Locks | one `tokio::sync::Mutex` per repository for writes; reads take none | one writer at a time is what the CAS would allow anyway, without retries |
 | Paths | any UTF-8 git can store, but no control bytes, no `.`, `..` or `.git` segment, at most 4096 bytes; C-quoted in the fast-import stream | 400 for what git cannot store, and for what text protocols cannot carry safely |
 | Modes | `100644` and `100755` | what a commit pack may write |
@@ -217,15 +219,21 @@ a policy choice rather than the service's behaviour.
    tip, blobs inline from the spools, C-quoted paths, `--big-file-threshold=1m`
    so a large blob streams into the pack without a delta search),
    onto a temporary ref `refs/macrofiche/tmp/<id>`.
-4. `diff-tree` between the tip and the new commit gives the changed
+4. If the new commit's tree is its parent's (on a branch it would
+   create, the empty tree), the pack changes nothing: the temporary ref
+   is deleted, and the answer is the service's 412, `no changes to
+   commit` (contract 5.8). No record is written, nothing moves, nothing
+   is announced; the unreferenced commit is maintenance's to prune.
+5. `diff-tree` between the tip and the new commit gives the changed
    paths; the last-commit record is written and fsynced.
-5. One `update-ref --stdin` transaction: `update refs/heads/<b> <new>
+6. One `update-ref --stdin` transaction: `update refs/heads/<b> <new>
    <tip>` (or `create`), `delete` of the temporary ref. git's ref
    transaction is the compare-and-swap; it fsyncs the ref.
-6. Answer 201; queue the webhook; remove the spools.
+7. Answer 201; queue the webhook; remove the spools.
 
-A pack whose answer is lost has landed by step 5, so a client that
-re-reads sees it (contract section 9).
+A pack whose answer is lost has landed by step 6, so a client that
+re-reads sees it (contract section 9), and a client that sends it again
+gets step 4's 412.
 
 ### Merge (5.10), preview (15.1), restore (5.11), branch create (5.9)
 
@@ -236,8 +244,10 @@ re-reads sees it (contract section 9).
   for `ff_only` when diverged), or `merge-tree --write-tree` (409
   `merge_conflict` with the paths), then `commit-tree` with parents
   `[target, source]` (or `[target]` for `squash`), the index record,
-  and the CAS. Unrelated histories are 400 unless
-  `allow_unrelated_histories`.
+  and the CAS. A squash whose tree is the target's is the commit pack's
+  412 (`no changes to commit`); a merge commit is made even then (git's:
+  its second parent records the merge). Unrelated histories are 400
+  unless `allow_unrelated_histories`.
 - **Preview**: the same decision, no lock, nothing written:
   `merge-tree --write-tree --name-only` writes objects (an unreferenced
   tree) but no ref; they are pruned by maintenance.
@@ -656,6 +666,22 @@ pinned server-side build has none) against the release binary, in
 
 With P5 the workspace has 96 tests (two more pure, three against the
 real client).
+
+### After P5: no empty commits (2026-10-06)
+
+fragment PR #163 found that the service refuses a commit pack that
+changes nothing (412, `no changes to commit`), and its cell now answers
+main's tip for that refusal; macrofiche made an empty commit instead
+(fragment's `docs/self-host.md`, found 33). A commit pack or a squash
+that changes nothing is now that 412, the service's body exactly
+(contract 5.8). Three tests more, 99 in all: the store's (each kind of
+such pack, the compare-and-swap first, a mode as a change, a squash
+refused while a merge commit is made, no temporary ref left, a reopen),
+one over HTTP (the body, no webhook, the replay after a kill -9 and a
+restart), and the fake's own, ported. fragment's `codestore` and
+`templates` sections on celld against the release binary: 64 passed, 0
+failed; against main's, 62 and 2 (templates' "a write of what main
+holds commits nothing" and its "main moves" check).
 
 ## Debt
 

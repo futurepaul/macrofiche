@@ -28,6 +28,22 @@ fn fake_jwt_scopes_and_repo_claims() {
     assert_eq!(write_only.status, 403, "missing git:read");
 }
 
+// The fake's `a_pack_that_changes_nothing_is_refused` (fragment PR #163):
+// a pack that would change nothing is refused as the service refuses it
+// (412, "no changes to commit"), never an empty commit.
+#[test]
+fn fake_a_pack_that_changes_nothing_is_refused() {
+    let fx = Fx::start("parity-unchanged");
+    let r = fx.create_repo("r");
+    let head = fx.commit_at_head(&r, &[up("a", b"1")]);
+    let post = |changes: &[Change<'_>]| fx.commit(&r, Some(&head), changes).status;
+    assert_eq!(post(&[up("a", b"1")]), 412, "the same bytes");
+    assert_eq!(post(&[Change::Delete { path: "nope" }]), 412, "a file that is not there");
+    assert_eq!(fx.head(&r, "main").as_deref(), Some(head.as_str()), "no commit was made");
+    assert_eq!(post(&[up("a", b"1"), up("b", b"2")]), 201, "one file changed");
+    assert_ne!(fx.head(&r, "main").as_deref(), Some(head.as_str()));
+}
+
 // The CLI's `commit_triple_success_replay_conflict`.
 #[test]
 fn cli_commit_triple_success_replay_conflict() {

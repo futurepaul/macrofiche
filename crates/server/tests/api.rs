@@ -5,7 +5,9 @@
 mod common;
 
 use common::*;
-use macrofiche_testkit::{blob_sha, Send};
+use std::time::Duration;
+
+use macrofiche_testkit::{blob_sha, Answer, Receiver, Send};
 use serde_json::json;
 
 // Goal: 5.1 to 5.3 as the cell's `ensure_repo` uses them: create answers
@@ -177,6 +179,72 @@ fn commit_pack_refusals() {
     let bad_author = json!({"metadata": {"target_branch": "main", "expected_target_sha": head, "author": {"name": "a<b", "email": "x"}, "files": up1}}).to_string();
     assert_eq!(fx.pack(&repo, format!("{bad_author}\n{}\n", chunk("c0", b"x", true)).as_bytes()).status, 400);
     unmoved("every refusal");
+    assert!(fx.fsck_all().iter().all(|(_, ok, _)| *ok));
+}
+
+// Goal: a write that changes nothing is refused as the service refuses
+// it (contract 5.8): 412 with the service's own body, nothing moved,
+// nothing announced. A stale pack is still 409 (the compare-and-swap
+// first). The cell's replay of a write whose answer it lost (the same
+// files at the new head) is that 412, also after a kill -9 and a
+// restart; a squash merge that adds nothing answers it too, while a merge
+// commit does not; a change still lands. Method: fragment's packs over
+// HTTP, each answer compared with the body fragment PR #163 read from a
+// preview, and a repository's own webhook counting deliveries.
+#[test]
+fn a_write_that_changes_nothing_is_refused() {
+    const AUTHOR: (&str, &str) = ("fragment/1a2b3c4d", "1a2b3c4d@users.fragment");
+    let fx = Fx::start("api-unchanged");
+    let repo = fx.create_repo("r");
+    let hook = Receiver::start(vec![200]);
+    let b = json!({ "url": hook.url, "secret": "s" }).to_string();
+    assert_eq!(fx.call("PUT", &Fx::repo_path(&repo, "webhook"), &repo, &["repo:write"], Some(("application/json", b.as_bytes()))).status, 200);
+    let write = [up("site/index.html", b"<h1>made through the api</h1>"), up("site/extra.txt", b"extra")];
+    let head = fx.commit_at_head(&repo, &write);
+    assert_eq!(hook.wait_for(1, Duration::from_secs(5)).len(), 1, "the commit is announced");
+    let service = json!({ "commit": null, "result": { "target_branch": "", "branch": "", "old_sha": "", "new_sha": "", "success": false, "status": "precondition_failed", "message": "no changes to commit" } });
+    let refused = |a: &Answer| a.status == 412 && a.json() == service && a.header("content-type").is_some_and(|c| c.starts_with("application/json"));
+    let replay = fx.commit(&repo, Some(&head), &write);
+    assert!(refused(&replay), "the replay of the write: {replay}");
+    let same = fx.commit(&repo, Some(&head), &[up("site/extra.txt", b"extra")]);
+    assert!(refused(&same), "the bytes main holds: {same}");
+    let absent = fx.commit(&repo, Some(&head), &[Change::Delete { path: "nope" }]);
+    assert!(refused(&absent), "a delete of what is not there: {absent}");
+    let empty = fx.commit(&repo, Some(&head), &[]);
+    assert!(refused(&empty), "no files: {empty}");
+    let blind = fx.commit(&repo, None, &write);
+    assert!(refused(&blind), "expecting nothing: {blind}");
+    let fresh = fx.pack(&repo, &commit_pack("fresh", None, "m", AUTHOR, &[Change::Delete { path: "x" }]));
+    assert!(refused(&fresh), "deletes alone, on a branch it would make: {fresh}");
+    assert_eq!(fx.head(&repo, "fresh"), None, "no branch made");
+    // the compare-and-swap first, as the fake orders them
+    let stale = fx.commit(&repo, Some("0123456789abcdef0123456789abcdef01234567"), &write);
+    assert_eq!((stale.status, stale.json()["result"]["message"].as_str()), (409, Some("expected branch head did not match current tip")), "{stale}");
+    assert_eq!(fx.shas(&repo, "main", 10), vec![head.clone()], "no empty commit");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(hook.received().len(), 1, "no refusal is announced");
+    // a squash of a branch whose change main has already adds nothing;
+    // merging it is a merge commit (git's: its second parent records it)
+    assert_eq!(fx.create_branch(&repo, &head, "side", false).status, 200);
+    assert_eq!(fx.pack(&repo, &commit_pack("side", Some(&head), "side", AUTHOR, &[up("b.txt", b"b")])).status, 201);
+    let main2 = fx.commit_at_head(&repo, &[up("b.txt", b"b")]);
+    let merge = |squash: bool| {
+        let author = json!({ "name": AUTHOR.0, "email": AUTHOR.1 });
+        fx.post_json(&repo, "merge", &json!({ "target_branch": "main", "source_ref": "side", "strategy": "ff_prefer", "squash": squash, "expected_target_sha": main2, "commit_message": "side", "author": author }))
+    };
+    let a = merge(true);
+    assert!(refused(&a), "a squash that adds nothing: {a}");
+    assert_eq!(fx.head(&repo, "main").as_deref(), Some(main2.as_str()));
+    let a = merge(false);
+    assert_eq!((a.status, a.json()["result"].as_str()), (200, Some("merge_commit")), "{a}");
+    // restarted after a kill -9: the replay is refused again, a change lands
+    let tip = fx.head(&repo, "main").unwrap();
+    let fx = fx.restart();
+    let again = fx.commit(&repo, Some(&tip), &[up("b.txt", b"b")]);
+    assert!(refused(&again), "the replay, after a restart: {again}");
+    let landed = fx.commit(&repo, Some(&tip), &[up("b.txt", b"b2")]);
+    assert_eq!(landed.status, 201, "{landed}");
+    assert_eq!(fx.read(&repo, "b.txt", "main").unwrap(), b"b2");
     assert!(fx.fsck_all().iter().all(|(_, ok, _)| *ok));
 }
 

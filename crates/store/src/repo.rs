@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use macrofiche_contract::names::{self, Expected};
 use macrofiche_git::fastimport::{Head, Ident};
-use macrofiche_git::linux::plumbing::unknown_object;
+use macrofiche_git::linux::plumbing::{unknown_object, EMPTY_TREE};
 use macrofiche_git::parse::{self, mode, Kind, Signature};
 use macrofiche_git::{BlobReader, Change, CatFile, GitError, Merged, ObjInfo, Oid, Pool, RefOp, RefRefusal, Repo, Source};
 
@@ -132,6 +132,10 @@ pub enum CommitOutcome {
     Committed(Committed),
     /// The branch is not where the pack expected (409).
     Moved { current: Option<Oid> },
+    /// The pack changes nothing: its tree is its parent's, or empty on a
+    /// branch it would create. The service's 412 (`no changes to
+    /// commit`): no empty commit is made, and nothing moves.
+    Unchanged { tip: Option<Oid> },
 }
 
 /// `strategy`: the service's three.
@@ -207,6 +211,11 @@ pub enum MergeOutcome {
     Conflict { base: Option<Oid>, paths: Vec<String> },
     /// `ff_only`, and the target has diverged.
     NotFastForward { base: Option<Oid> },
+    /// A squash whose tree is the target's: a one-parent commit that
+    /// changes nothing, refused as a commit pack's is (412), nothing
+    /// moved. A merge commit is never refused so: its second parent
+    /// records the merge even where the tree stays the same, as git's.
+    Unchanged { current: Oid },
 }
 
 /// A merge preview (contract 15.1).
@@ -579,6 +588,14 @@ impl RepoHandle {
         Ok(r)
     }
 
+    /// Deletes a temporary ref at `at` that no branch will move to.
+    async fn drop_tmp_ref(&self, tmp: &str, at: Oid) -> Result<(), StoreError> {
+        match self.git.update_refs(&[RefOp::Delete { name: tmp.into(), old: at }]).await? {
+            Ok(()) => Ok(()),
+            Err(r) => Err(self.refusal(r, tmp)),
+        }
+    }
+
     fn refusal(&self, r: RefRefusal, ref_name: &str) -> StoreError {
         match r {
             RefRefusal::Locked => StoreError::Unavailable(format!("{ref_name} is locked")),
@@ -624,9 +641,23 @@ impl RepoHandle {
             GitError::Failed { stderr, .. } if stderr.contains("invalid path") => StoreError::invalid("invalid_path", stderr.trim().trim_start_matches("fatal: ").to_string()),
             _ => e.into(),
         })?;
+        // The service makes no empty commit (contract 5.8): a pack whose
+        // tree is its parent's, or empty where it would make the branch,
+        // is refused after the compare-and-swap, as the fake orders the
+        // two. fast-import's commit goes with its temporary ref, an object
+        // nothing reaches, which maintenance prunes.
+        let tree = self.commit_info(new).await?.tree;
+        let before = match parent {
+            Some(p) => self.commit_info(p).await?.tree,
+            None => Oid::parse(EMPTY_TREE).expect("the empty tree's id is an id"),
+        };
+        if tree == before {
+            self.drop_tmp_ref(&tmp, new).await?;
+            self.touched();
+            return Ok((CommitOutcome::Unchanged { tip }, None));
+        }
         let record = self.compute_record(new, parent.as_slice()).await?;
         self.write_record(&record).await?;
-        let tree = self.commit_info(new).await?.tree;
         match self.move_ref(&refname, tip, new, Some(&tmp)).await? {
             Ok(()) => {}
             Err(RefRefusal::Moved { current }) => return Ok((CommitOutcome::Moved { current: Some(current) }, None)),
@@ -732,6 +763,12 @@ impl RepoHandle {
             Merged::Conflict { paths, .. } => return Ok((MergeOutcome::Conflict { base, paths }, None)),
             Merged::Unrelated => return Err(StoreError::invalid("unrelated_histories", "refusing to merge unrelated histories")),
         };
+        // A squash is one commit on the target's tip: one that would change
+        // nothing is refused, as a commit pack's is (merge-tree's tree is
+        // left unreferenced, as a preview's, for maintenance to prune).
+        if req.squash && tree == self.commit_info(old).await?.tree {
+            return Ok((MergeOutcome::Unchanged { current: old }, None));
+        }
         let parents = if req.squash { vec![old] } else { vec![old, source] };
         for p in &parents {
             self.ensure_record(*p).await?;
