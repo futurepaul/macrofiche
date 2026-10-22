@@ -345,7 +345,7 @@ async fn receive_pack(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>, en
     // The push runs on a task of its own to its end, as every write does,
     // under the repository's write lock.
     let (report, moved) = tokio::spawn(async move {
-        let _w = h2.write_lock().lock().await;
+        let _w = h2.write().await.map_err(|e| e.problem())?;
         let before = h2.git.refs("refs/heads/").await.map_err(|e| Problem::unavailable(e.to_string()))?;
         let max_input = format!("receive.maxInputSize={PUSH_BYTES_MAX}");
         let mut proc = h2

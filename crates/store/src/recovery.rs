@@ -23,6 +23,9 @@ pub struct Recovery {
     pub spools: usize,
     pub half_made: usize,
     pub strays: usize,
+    /// Deleted repositories whose leftovers were removed (a no-op unless
+    /// a delete was cut short).
+    pub deleted: usize,
 }
 
 fn is_temp_name(name: &str) -> bool {

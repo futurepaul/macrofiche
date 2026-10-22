@@ -10,7 +10,7 @@ use macrofiche_git::jail::Settings;
 use macrofiche_git::{Oid, RunOpts};
 use macrofiche_pack::{FileOp, Metadata, Op};
 use macrofiche_store::repo::{CommitOutcome, CreateOutcome, MergeKind, MergeOutcome, MergeRequest, PackChange, PackFile, RestoreOutcome, Strategy};
-use macrofiche_store::{RepoHandle, Store};
+use macrofiche_store::{Deleted, RepoHandle, RepoMeta, Store};
 
 async fn store() -> (Arc<Store>, PathBuf) {
     let root = macrofiche_testkit::scratch("store");
@@ -92,6 +92,71 @@ async fn repositories_are_made_once_and_survive_a_restart() {
     assert_eq!((rec.repos, rec.strays), (2, 0));
     assert_eq!(s2.repo_meta("fragment-dev", "todo--paul").unwrap(), m);
     assert!(std::fs::read_dir(root.join("state/tmp")).unwrap().next().is_none());
+}
+
+/// Every file under `dir`, relative to it, sorted.
+fn files_under(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            match e.file_type().unwrap().is_dir() {
+                true => stack.push(e.path()),
+                false => out.push(e.path().strip_prefix(dir).unwrap().to_string_lossy().into_owned()),
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+// Goal: a delete (contract 5.13) leaves nothing a reader or a writer can
+// reach but its marked identity, keeps its name taken, answers a delete
+// again as done, and holds across a restart; a delete a crash cut short
+// after its mark is finished at boot. Method: a repository with a commit
+// deleted while a handle to it is held, then asked again, made again and
+// reopened; another marked by hand with its data left, as such a crash
+// leaves it, then a reopen.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_deleted_repository_is_gone_for_good() {
+    let (s, root) = store().await;
+    let m = s.create_repo("o", "gone", "main", 1).await.unwrap();
+    let kept = s.create_repo("o", "kept", "main", 2).await.unwrap();
+    let r = s.repo("o", "gone").await.unwrap();
+    commit(&r, &root, "main", &[F::Up("a", b"a")], 1_790_000_000).await;
+    let dir = r.dir.clone();
+    assert!(files_under(&dir).len() > 1);
+    let d = s.delete_repo("o", "gone", 5).await.unwrap();
+    assert_eq!(d, Deleted::Now(RepoMeta { deleted_at_ms: Some(5), ..m.clone() }));
+    assert_eq!(files_under(&dir), ["macrofiche/repo.json"], "nothing but its marked identity");
+    // a handle held across it writes nothing
+    assert_eq!(r.write().await.unwrap_err().problem().status, 404);
+    assert_eq!(s.repo("o", "gone").await.err().map(|e| e.problem().status), Some(404));
+    assert!(s.repo_by_id("o", &m.repo_id).is_none() && s.repo_meta("o", "gone").is_none());
+    assert_eq!(s.repos_page("o", None, 100, None).0, std::slice::from_ref(&kept), "it leaves the list");
+    // replayed: done; its name is never made again; an unknown one is 404
+    assert_eq!(s.delete_repo("o", "gone", 6).await.unwrap(), Deleted::Already);
+    let again = s.create_repo("o", "gone", "main", 7).await.unwrap_err().problem();
+    assert_eq!((again.status, again.code), (409, "repository_deleted"));
+    assert_eq!(s.delete_repo("o", "never", 8).await.unwrap_err().problem().status, 404);
+    drop((r, s));
+    let open = || Store::open(root.join("state"), Settings::linux(macrofiche_testkit::git_prefix()));
+    let (s, rec) = open().await.unwrap();
+    assert_eq!((rec.repos, rec.deleted, rec.strays), (1, 1, 0));
+    assert!(s.repo_meta("o", "gone").is_none());
+    assert_eq!(s.create_repo("o", "gone", "main", 9).await.unwrap_err().problem().code, "repository_deleted", "after a restart too");
+    // a delete cut short after its mark: its data is still there
+    let r = s.repo("o", "kept").await.unwrap();
+    commit(&r, &root, "main", &[F::Up("k", b"k")], 1_790_000_002).await;
+    let kdir = r.dir.clone();
+    let marked = RepoMeta { deleted_at_ms: Some(10), ..kept };
+    std::fs::write(kdir.join("macrofiche/repo.json"), serde_json::to_vec(&marked).unwrap()).unwrap();
+    drop((r, s));
+    let (s, rec) = open().await.unwrap();
+    assert_eq!((rec.repos, rec.deleted), (0, 2));
+    assert!(s.repo_meta("o", "kept").is_none());
+    assert_eq!(files_under(&kdir), ["macrofiche/repo.json"], "finished at boot");
+    assert!(s.repos_page("o", None, 100, None).0.is_empty());
 }
 
 // Goal: commit packs land as git commits on the compare-and-swap's terms

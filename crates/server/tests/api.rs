@@ -68,6 +68,53 @@ fn repositories_create_list_and_resolve() {
     assert_eq!(fx.call("POST", "/api/repos", "a b", &["repo:write"], Some(("application/json", body.as_bytes()))).status, 400);
 }
 
+// Goal: 5.13 as the cell's `delete_repo` calls it (a wiped person's
+// fragments): 200 once, then the repo answers 404 on every route, leaves
+// the org's list, its id resolves no more, a delete again is 409
+// `repository_deleted` (what the cell reads as done), and its name is
+// never made again; refused, deleting nothing, with git's scopes or
+// another repo's token; all of it across a kill -9. Method: the cell's
+// calls.
+#[test]
+fn a_repo_is_deleted() {
+    let fx = Fx::start("api-delete");
+    let made = fx.create("gone");
+    let id = made.json()["repo_id"].as_str().unwrap().to_string();
+    let repo = fx.call("GET", &format!("/api/repo-urls/{id}"), &id, &["org:read"], None).json()["url"].as_str().unwrap().to_string();
+    let tip = fx.commit_at_head(&repo, &[up("a.txt", b"a")]);
+    fx.create_repo("kept");
+    let delete = |fx: &Fx, claim: &str, scopes: &[&str]| fx.call("DELETE", &format!("/api/repos/{}", enc(&repo)), claim, scopes, None);
+    // invalid: git's scopes, another repo's token
+    assert_eq!(delete(&fx, &repo, &["git:write"]).status, 403);
+    assert_eq!(delete(&fx, "kept", &["repo:write"]).status, 404);
+    assert_eq!(fx.head(&repo, "main").as_deref(), Some(tip.as_str()), "a refused delete deletes nothing");
+    let a = delete(&fx, &repo, &["repo:write"]);
+    assert_eq!(a.status, 200, "{a}");
+    assert_eq!((a.json()["repo_name"].as_str(), a.json()["repo_id"].as_str()), (Some("gone"), Some(id.as_str())));
+    let gone = |fx: &Fx| {
+        let b = fx.get(&repo, "branch", "name=main");
+        let f = fx.file(&repo, "a.txt", &tip);
+        let c = fx.commit(&repo, Some(&tip), &[up("b.txt", b"b")]);
+        let u = fx.call("GET", &format!("/api/repo-urls/{id}"), &id, &["org:read"], None);
+        let listed = fx.call("GET", "/api/repos?limit=100", ORG, &["org:read"], None).json();
+        let names: Vec<String> = listed["repos"].as_array().unwrap().iter().map(|r| r["repo_name"].as_str().unwrap().to_string()).collect();
+        assert_eq!((b.status, b.json()["code"].as_str()), (404, Some("repository_not_found")));
+        assert_eq!((f.status, c.status, u.status), (404, 404, 404));
+        assert_eq!(names, ["kept"], "it leaves the list");
+        // replayed: done, as the cell reads it; its name is never made again
+        let again = delete(fx, &repo, &["repo:write"]);
+        assert_eq!((again.status, again.json()["code"].as_str()), (409, Some("repository_deleted")));
+        let remade = fx.create("gone");
+        assert_eq!((remade.status, remade.json()["code"].as_str()), (409, Some("repository_deleted")));
+        assert_eq!(fx.head("kept", "main"), None, "another repo serves on");
+    };
+    gone(&fx);
+    assert_eq!(fx.call("DELETE", "/api/repos/never", "never", &["repo:write"], None).status, 404, "an unknown repo");
+    assert_eq!(fx.call("GET", "/api/repos/kept", "kept", &["repo:write"], None).status, 404, "a repo's other methods are no route");
+    let fx = fx.restart();
+    gone(&fx);
+}
+
 // Goal: the auth floor answers with the service's statuses (contract
 // section 3's table), on every kind of route. Method: one request per
 // fault.

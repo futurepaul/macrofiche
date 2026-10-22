@@ -3,7 +3,7 @@
 A self-hosted git store that answers code.storage's API: the files half
 of a self-hosted fragment (fragment's `docs/self-host.md`, seam 5), as
 sandcastle is its computers half. What it answers is
-[docs/contract.md](docs/contract.md): thirteen REST routes and a signed
+[docs/contract.md](docs/contract.md): fourteen REST routes and a signed
 push webhook, as fragment's cell and CLI call them; it also serves git's
 smart HTTP (`git clone`, `fetch`, `push`) with the same tokens. What it
 is built on is [docs/library.md](docs/library.md): git itself, at a
