@@ -2,7 +2,9 @@
 //! repositories: each one's identity in its own `macrofiche/repo.json`,
 //! read at boot into maps by name and by id (macrofiche is the only
 //! writer, so memory is the truth while it runs). A repository's
-//! directory is named by its id, never its name.
+//! directory is named by its id, never its name. A deleted repository
+//! keeps its `repo.json`, marked, and nothing else: its name is never made
+//! again (contract 5.13).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -48,11 +50,16 @@ pub struct RepoMeta {
     pub org: String,
     pub default_branch: String,
     pub created_at_ms: i64,
+    /// When it was deleted (contract 5.13): it serves nothing, leaves the
+    /// org's list, and its name stays taken.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at_ms: Option<i64>,
 }
 
 pub const META_FILE: &str = "macrofiche/repo.json";
 
-/// Every repository of every org, by name and by id.
+/// Every repository of every org, by name and by id, the deleted ones
+/// included (`entry`); the lookups that serve skip those.
 #[derive(Default)]
 pub struct Registry {
     by_name: HashMap<(String, String), RepoMeta>,
@@ -98,13 +105,26 @@ impl Registry {
         self.by_name.insert((m.org.clone(), m.repo_name.clone()), m);
     }
 
-    pub fn by_name(&self, org: &str, name: &str) -> Option<&RepoMeta> {
+    /// The repository named `name`, deleted or not.
+    pub fn entry(&self, org: &str, name: &str) -> Option<&RepoMeta> {
         self.by_name.get(&(org.to_string(), name.to_string()))
     }
 
+    /// The repository named `name`, unless it was deleted.
+    pub fn by_name(&self, org: &str, name: &str) -> Option<&RepoMeta> {
+        self.entry(org, name).filter(|m| m.deleted_at_ms.is_none())
+    }
+
+    /// The repository with the id `id`, unless it was deleted.
     pub fn by_id(&self, org: &str, id: &str) -> Option<&RepoMeta> {
         let name = self.by_id.get(&(org.to_string(), id.to_string()))?;
         self.by_name(org, name)
+    }
+
+    /// Marks `name` deleted at `at_ms` (its `repo.json` says so already).
+    pub fn mark_deleted(&mut self, org: &str, name: &str, at_ms: i64) {
+        let m = self.by_name.get_mut(&(org.to_string(), name.to_string())).expect("a repository deleted is registered");
+        m.deleted_at_ms = Some(at_ms);
     }
 
     /// Claims `name` for a create: false when it exists or is being made.
@@ -132,7 +152,7 @@ impl Registry {
     /// `after` (the last of the page before), at most `limit`, those whose
     /// name holds `q` (lowercase) when given; and whether more follow.
     pub fn page(&self, org: &str, after: Option<(i64, &str)>, limit: usize, q: Option<&str>) -> (Vec<RepoMeta>, bool) {
-        let mut all: Vec<&RepoMeta> = self.by_name.values().filter(|m| m.org == org && q.is_none_or(|q| m.repo_name.to_ascii_lowercase().contains(q))).collect();
+        let mut all: Vec<&RepoMeta> = self.by_name.values().filter(|m| m.org == org && m.deleted_at_ms.is_none() && q.is_none_or(|q| m.repo_name.to_ascii_lowercase().contains(q))).collect();
         all.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms).then_with(|| b.repo_id.cmp(&a.repo_id)));
         let start = match after {
             None => 0,
@@ -143,7 +163,7 @@ impl Registry {
         (page, more)
     }
 
-    /// Every repository, for boot.
+    /// Every repository, the deleted included, for boot.
     pub fn all(&self) -> Vec<RepoMeta> {
         self.by_name.values().cloned().collect()
     }
@@ -183,7 +203,7 @@ mod tests {
     use super::*;
 
     fn meta(org: &str, name: &str, id: &str, ms: i64) -> RepoMeta {
-        RepoMeta { repo_id: id.into(), repo_name: name.into(), org: org.into(), default_branch: "main".into(), created_at_ms: ms }
+        RepoMeta { repo_id: id.into(), repo_name: name.into(), org: org.into(), default_branch: "main".into(), created_at_ms: ms, deleted_at_ms: None }
     }
 
     // Goal: pages run newest first and a page's last names where the next
@@ -232,5 +252,23 @@ mod tests {
         assert!(!r.begin("o", "n"), "after");
         assert_eq!(r.by_id("o", "id1").unwrap().repo_name, "n");
         assert!(r.by_id("p", "id1").is_none(), "ids are per org");
+    }
+
+    // Goal: a deleted repository serves nothing and leaves the org's list,
+    // and its name and id stay taken: a create of it is refused, never a
+    // new repository under a wiped person's name (contract 5.13). Method:
+    // two repos, one deleted.
+    #[test]
+    fn a_deleted_name_stays_taken() {
+        let mut r = Registry::default();
+        r.insert(meta("o", "gone", "g", 1));
+        r.insert(meta("o", "kept", "k", 2));
+        r.mark_deleted("o", "gone", 5);
+        assert!(r.by_name("o", "gone").is_none() && r.by_id("o", "g").is_none(), "serves nothing");
+        assert_eq!(r.entry("o", "gone").and_then(|m| m.deleted_at_ms), Some(5));
+        let (all, more) = r.page("o", None, 100, None);
+        assert_eq!((all.iter().map(|m| m.repo_name.as_str()).collect::<Vec<_>>(), more), (vec!["kept"], false), "leaves the list");
+        assert!(!r.begin("o", "gone"), "its name is never made again");
+        assert_eq!(r.by_id("o", "k").unwrap().repo_name, "kept");
     }
 }

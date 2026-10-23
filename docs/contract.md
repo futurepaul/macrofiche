@@ -11,9 +11,10 @@
 
 ## Summary
 
-macrofiche answers thirteen HTTP routes and sends one webhook. That is
-all of code.storage that fragment uses: the twelve of section 5, and the
-merge preview that fragment PR #127 adds (section 15).
+macrofiche answers fourteen HTTP routes and sends one webhook. That is
+all of code.storage that fragment uses: the thirteen of section 5 (5.13,
+a repo's delete, since fragment's wipe of a person), and the merge
+preview that fragment PR #127 adds (section 15).
 
 - Every client speaks REST over HTTPS with a bearer JWT. Nothing in
   fragment speaks git's smart-HTTP protocol: no clone, fetch or push, no
@@ -71,9 +72,15 @@ bytes, with no `/`. Both clients percent-encode the path segment anyway
 (`cell/src/cs.rs:60-62`, `cli/src/codestorage.rs:193-195`). macrofiche
 decodes it once, as the service does.
 
-Fragment never deletes a repo. A fragment deleted and created again under
-the same name finds its old repo and keeps its history and branches
-(`cell/src/cs.rs:142-176`, `docs/operate.md:191`).
+A fragment deleted and created again under the same name by the same
+owner finds its old repo and keeps its history and branches
+(`cell/src/cs.rs`, `ensure_repo`). Fragment deletes a repo only when an
+operator wipes a person: each of their fragments' repos (5.13; fragment
+9e31c8c7, 2026-10-07). Since that change a repo's name carries a digest
+of its owner's identity
+(`<prefix><name>--<12 hex>`, `fragment_core::codestorage::repo_name`), so
+a name another person makes later never finds a deleted repo, and a
+deleted name is never made again.
 
 **The url form.** Creating a repo answers a `repo_id`.
 `GET /api/repo-urls/{repo_id}` answers its `url`. The url is what every
@@ -614,6 +621,27 @@ Fragment accepts 200 or 201, and reads `result.success == true` and
 - **Paging:** fragment sends no cursor. The fake's `limit` defaults to 30,
   at most 100; the service's defaults to 20.
 
+### 5.13 `DELETE /api/repos/{repo}`: delete a repo
+
+- **Scope:** `repo:write`, the `repo` claim the repo's url form.
+- **Caller:** the cell, ending a wiped person's fragments
+  (`cell/src/cs.rs`, `delete_repo`; `crates/core/src/codestorage.rs`,
+  `repo_deleted`), asked again until it is done.
+- **200:** `{"message", "repo_name", "repo_id"}`. Fragment reads the
+  status alone: deleted by this call.
+- **409 `repository_deleted`:** deleted before (a replay). Fragment reads
+  it, and 404 and 410, as done.
+- **404:** no such repo, or a token for another repo.
+- **After it:** every call on the repo is 404, it leaves the org's list,
+  its id resolves no more (5.3), and a create of its name is 409
+  `repository_deleted`: the fake holds fragment to never reusing a name,
+  since the service's docs do not say a deleted name is free.
+- **Semantics:** the service deletes softly and cleans its storage up
+  later. macrofiche deletes at once, under the repo's write lock: its
+  `repo.json` is marked first, durably, then everything else in its
+  directory is removed (boot finishes a delete a crash cut short). A
+  write that waited on the lock is refused (404).
+
 ## 6. The push webhook
 
 **When.**
@@ -828,10 +856,11 @@ then gets raw bytes of any size.
 | webhook body | `repository.{id,url}`, `customer_id` | `type`, `repository.repo_name`, `org` | the union |
 | webhook registration | lever | dashboard, one per org | question 2 |
 | without an org key | any bearer passes | never | never |
+| a deleted repo's name made again | 409 `repository_deleted` | not documented | 409 `repository_deleted` |
 
 ## 11. What the service offers that fragment does not use
 
-- **Routes:** repo get, update and delete; `/api/meta`;
+- **Routes:** repo get and update; `/api/meta`;
   `/api/repo-changes`; branches list, delete and diff; commit get, diff,
   `diff-commit`, `reset-commits`; files list, archive, blame, grep; tags;
   notes; merge preview; git credentials; `pull-upstream`; every
@@ -861,6 +890,7 @@ then gets raw bytes of any size.
 | 5.10 | `POST .../merge` | deploy API, templates | deploy | `deploy`, `templates`, `isolation`, `ledger` |
 | 5.11 | `POST .../restore-commit` | — | rollback | `deploy`; CLI unit tests |
 | 5.12 | `GET .../commits` | — | drafts, rollback | `deploy`; CLI unit tests |
+| 5.13 | `DELETE /api/repos/{repo}` | a wiped person's fragments, ended | — | `wipe`, `codestore` |
 | 6 | push webhook (out) | receives | — | `files` (signature, window, redelivery, lost delivery), and every section using `Suite::commit` locally |
 
 The e2e also drives the fake through levers that are not HTTP routes

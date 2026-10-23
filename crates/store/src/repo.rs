@@ -251,6 +251,9 @@ pub struct RepoHandle {
     pub git: Repo,
     pub pool: Arc<Pool>,
     pub(crate) write_lock: tokio::sync::Mutex<()>,
+    /// Deleted (`Store::delete_repo`, under the write lock): every write
+    /// after is refused.
+    gone: std::sync::atomic::AtomicBool,
     caches: Arc<Caches>,
     dirty: Dirty,
 }
@@ -270,13 +273,25 @@ fn idents(author: Option<Ident>, committer: Option<Ident>) -> (Ident, Ident) {
 impl RepoHandle {
     pub(crate) fn new(meta: RepoMeta, dir: PathBuf, git: Repo, caches: Arc<Caches>, dirty: Dirty) -> RepoHandle {
         let pool = Pool::new(git.clone());
-        RepoHandle { meta, dir, git, pool, write_lock: tokio::sync::Mutex::new(()), caches, dirty }
+        RepoHandle { meta, dir, git, pool, write_lock: tokio::sync::Mutex::new(()), gone: std::sync::atomic::AtomicBool::new(false), caches, dirty }
     }
 
     /// The lock every write of this repository takes (and maintenance,
-    /// and macrofiche's webhook registrations).
-    pub fn write_lock(&self) -> &tokio::sync::Mutex<()> {
-        &self.write_lock
+    /// and macrofiche's webhook registrations), held; refused once the
+    /// repository is deleted, as its every call is (404), so a write that
+    /// waited on its delete writes nothing.
+    pub async fn write(&self) -> Result<tokio::sync::MutexGuard<'_, ()>, StoreError> {
+        let w = self.write_lock.lock().await;
+        if self.gone.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(StoreError::not_found("repository_not_found", "repository not found"));
+        }
+        Ok(w)
+    }
+
+    /// Marks it deleted: its write lock is held, its `repo.json` marked.
+    pub(crate) fn gone(&self) {
+        assert!(self.write_lock.try_lock().is_err(), "a repository is deleted under its write lock");
+        self.gone.store(true, std::sync::atomic::Ordering::Release);
     }
 
     fn key(&self, c: Oid) -> (String, Oid) {
@@ -609,7 +624,7 @@ impl RepoHandle {
     /// moved from the tip it was checked at.
     pub async fn commit_pack(&self, meta: &macrofiche_pack::Metadata, files: &[PackFile], author: Option<Ident>, committer: Option<Ident>, now: i64) -> Result<(CommitOutcome, Option<Moved>), StoreError> {
         let (author, committer) = idents(author, committer);
-        let _w = self.write_lock.lock().await;
+        let _w = self.write().await?;
         let refname = ref_name(&meta.target_branch, meta.ephemeral);
         let tip = self.ref_tip(&refname).await?;
         let matches = match &meta.expected {
@@ -676,7 +691,7 @@ impl RepoHandle {
 
     /// A branch at `base` (contract 5.9): one creator wins.
     pub async fn create_branch(&self, target: &str, ephemeral: bool, base: &str, base_ephemeral: bool, now: i64) -> Result<(CreateOutcome, Option<Moved>), StoreError> {
-        let _w = self.write_lock.lock().await;
+        let _w = self.write().await?;
         let at = self.resolve(base, base_ephemeral).await?.ok_or_else(|| StoreError::not_found("ref_not_found", format!("base_ref not found: {base}")))?;
         let refname = ref_name(target, ephemeral);
         match self.move_ref(&refname, None, at, None).await? {
@@ -729,7 +744,7 @@ impl RepoHandle {
     /// A merge (contract 5.10, with the service's semantics).
     pub async fn merge(&self, req: MergeRequest, now: i64) -> Result<(MergeOutcome, Option<Moved>), StoreError> {
         let (author, committer) = idents(req.author.clone(), req.committer.clone());
-        let _w = self.write_lock.lock().await;
+        let _w = self.write().await?;
         let refname = ref_name(&req.target, req.target_ephemeral);
         let old = self.ref_tip(&refname).await?.ok_or_else(|| StoreError::not_found("branch_not_found", format!("branch not found: {}", req.target)))?;
         let source = self.resolve(&req.source, req.source_ephemeral).await?.ok_or_else(|| StoreError::not_found("ref_not_found", format!("source_ref not found: {}", req.source)))?;
@@ -792,7 +807,7 @@ impl RepoHandle {
     #[allow(clippy::too_many_arguments)]
     pub async fn restore(&self, target: &str, ephemeral: bool, base_ref: &str, expected: &Expected, message: &str, author: Option<Ident>, committer: Option<Ident>, now: i64) -> Result<(RestoreOutcome, Option<Moved>), StoreError> {
         let (author, committer) = idents(author, committer);
-        let _w = self.write_lock.lock().await;
+        let _w = self.write().await?;
         let refname = ref_name(target, ephemeral);
         let tip = self.ref_tip(&refname).await?.ok_or_else(|| StoreError::not_found("branch_not_found", format!("branch not found: {target}")))?;
         let matches = match expected {

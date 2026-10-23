@@ -6,7 +6,7 @@ engineering-style as sandcastle… base it on [a] low level library like
 libkrun… support all the features we use of code.storage including good
 blob support."
 
-What macrofiche answers is docs/contract.md (thirteen routes and a
+What macrofiche answers is docs/contract.md (fourteen routes and a
 webhook). What it is built on is docs/library.md: git itself, pinned,
 driven as processes, jailed. This document is how the two meet: the
 architecture, the decisions, the answers to the contract's open
@@ -85,7 +85,7 @@ at sandcastle's version (`Cargo.toml` says why each is there).
 ```
 <state_dir>/
   repos/<org>/<repo_id>.git/       a bare repository, created by rename (RENAME_NOREPLACE)
-    macrofiche/repo.json           {repo_id, repo_name, org, default_branch, created_at}
+    macrofiche/repo.json           {repo_id, repo_name, org, default_branch, created_at, deleted_at_ms?}
     macrofiche/lastcommit/aa/<38>  the last-commit index, one record per commit (like loose objects)
     macrofiche/tmp/                git's TMPDIR, inside the jail
   spool/<request>/<content_id>     a commit pack's decoded blobs while it uploads
@@ -96,7 +96,9 @@ A repository's directory is named by its `repo_id` (random, 32 hex),
 never by its name, so a name may be anything the contract allows (the
 service's names may hold `/`). The registry, name to id and id to name,
 is read from every `repo.json` at boot and kept in memory: macrofiche is
-the only writer.
+the only writer. A deleted repository (5.13) keeps its `repo.json`,
+marked with `deleted_at_ms`, and nothing else: it serves nothing, leaves
+the org's list, and its name and id stay taken.
 
 Each repository is created with this config (library.md,
 Recommendation): `core.fsync=all` and `core.fsyncMethod=fsync`;
@@ -258,6 +260,12 @@ gets step 4's 412.
   the record, the CAS. 201 in the commit pack's shape.
 - **Branch create**: `update-ref --stdin` `create` (one creator wins; a
   second gets 409), in `refs/heads/` or the ephemeral namespace.
+- **Repo delete** (5.13), under the write lock: `repo.json` marked
+  `deleted_at_ms` (written durably, as every `repo.json` is), the
+  handle marked gone (a write that waited on the lock is refused, 404),
+  the registry marked, then every other file in the directory removed.
+  A delete again is 409 `repository_deleted`, and so is a create of the
+  name.
 
 ## Reads
 
@@ -369,7 +377,9 @@ owns it) and is checked where input arrives.
   multi-pack-index chains); temporary objects and packs (`tmp_obj_*`,
   `tmp_pack_*`, `tmp_idx_*`, `incoming-*` quarantines); the temporary
   refs `refs/macrofiche/tmp/*`; the index's temporary files; `spool/`
-  and `tmp/`. What was removed is printed as JSON.
+  and `tmp/`; and whatever a deleted repository still holds beside its
+  `repo.json` (a delete cut short after its mark). What was removed is
+  printed as JSON.
 - **Idle-time maintenance**: a repository idle for 60 s with writes since
   its last maintenance gets `git maintenance run` with
   `geometric-repack`, `pack-refs`, `loose-objects` and `commit-graph`,
@@ -734,6 +744,8 @@ holds commits nothing" and its "main moves" check).
   refusal as 409 `not_fast_forward`; the service's documents leave both
   open.
 - The TLS listener is built and smoke-tested by hand, not by the suite.
+- A deleted repository's `repo.json` stays for good (its name is never
+  made again), and counts toward its org's 100,000 repositories.
 
 ## Risks
 

@@ -147,6 +147,12 @@ async fn route(app: &App, req: Request<Incoming>) -> Result<Resp, Problem> {
         let m = app.store.repo_by_id(&c.org, &id).ok_or_else(|| Problem::not_found("repository_not_found", "repository not found"))?;
         return Ok(json(200, &json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "url": m.repo_name })));
     }
+    if let Some(seg) = path.strip_prefix("/api/repos/").filter(|p| !p.contains('/') && method == Method::DELETE) {
+        let name = macrofiche_contract::query::decode_segment(seg).map_err(|e| bad("invalid_path", e.to_string()))?;
+        let c = claims(app, &req)?;
+        authorize(&c, Scope::RepoWrite, Some(&name)).map_err(|e| e.problem())?;
+        return delete_repo(app, &c, &name).await;
+    }
     let Some((seg, op)) = path.strip_prefix("/api/repos/").and_then(|p| p.split_once('/')) else {
         return Err(Problem::not_found("no_route", format!("no route {method} {path}")));
     };
@@ -282,6 +288,18 @@ fn list_repos(app: &App, c: &Claims, q: &Query) -> Result<Resp, Problem> {
         body["next_cursor"] = Cursor::Repos { created_ms: last.created_at_ms, repo_id: last.repo_id.clone() }.encode().into();
     }
     Ok(json(200, &body))
+}
+
+/// `DELETE /api/repos/{repo}` (contract 5.13): deleted at once, its
+/// storage with it. A delete again is 409 `repository_deleted`, as the
+/// service answers one.
+async fn delete_repo(app: &App, c: &Claims, name: &str) -> Result<Resp, Problem> {
+    let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
+    let (store, org, n) = (app.store.clone(), c.org.clone(), name.to_string());
+    match detached(async move { store.delete_repo(&org, &n, now_ms).await }).await?.map_err(store_err)? {
+        macrofiche_store::Deleted::Now(m) => Ok(json(200, &json!({ "message": "repository deleted", "repo_name": m.repo_name, "repo_id": m.repo_id }))),
+        macrofiche_store::Deleted::Already => Err(Problem::conflict("repository_deleted", "repository already deleted")),
+    }
 }
 
 // ---- reads: 5.4 to 5.7, 5.12, 15.1 ----
@@ -812,7 +830,7 @@ async fn put_webhook(h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Pro
     let b = json_body(req).await?;
     let url = opt_str(&b, "url")?.filter(|u| crate::config::valid_hook_url(u)).ok_or_else(|| bad("invalid_url", "url is an http(s) URL"))?.to_string();
     let secret = opt_str(&b, "secret")?.filter(|s| !s.is_empty() && s.len() <= crate::config::SECRET_BYTES_MAX).ok_or_else(|| bad("invalid_secret", "secret is 1 to 4096 bytes"))?;
-    let _w = h.write_lock().lock().await;
+    let _w = h.write().await.map_err(store_err)?;
     let mut hooks = read_repo_hooks(h);
     hooks.retain(|k| k.url != url);
     if hooks.len() >= webhook::REPO_HOOKS_MAX {
@@ -825,7 +843,7 @@ async fn put_webhook(h: &RepoHandle, req: Request<Incoming>) -> Result<Resp, Pro
 
 async fn delete_webhook(h: &RepoHandle, q: &Query) -> Result<Resp, Problem> {
     let url = q.get("url").ok_or_else(|| bad("missing_url", "url is required"))?.to_string();
-    let _w = h.write_lock().lock().await;
+    let _w = h.write().await.map_err(store_err)?;
     let mut hooks = read_repo_hooks(h);
     let before = hooks.len();
     hooks.retain(|k| k.url != url);

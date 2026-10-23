@@ -1,6 +1,6 @@
 //! macrofiche's repositories on disk (docs/design.md): the registry, one
 //! handle per repository with its write lock, the shared caches, boot
-//! recovery, and idle maintenance. The pure pieces (the last-commit
+//! recovery, idle maintenance, and deletes. The pure pieces (the last-commit
 //! records and rule, the LRU, the registry's pages, recovery's sweep) are
 //! tested on any host; the rest needs the engine.
 
@@ -12,7 +12,7 @@ pub mod registry;
 pub mod repo;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
@@ -68,6 +68,44 @@ fn key(org: &str, id: &str) -> String {
     format!("{org}/{id}")
 }
 
+/// What a delete did (contract 5.13).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Deleted {
+    /// Deleted by this call: its identity, marked.
+    Now(RepoMeta),
+    /// Deleted before it.
+    Already,
+}
+
+/// Removes everything a deleted repository held but its marked
+/// `repo.json`: its git data, its records, its webhooks. A delete runs it,
+/// and boot runs it again for one a crash cut short; what is gone already
+/// is no error.
+fn purge(dir: &Path) -> std::io::Result<()> {
+    let remove = |e: std::fs::DirEntry| -> std::io::Result<()> {
+        match e.file_type()?.is_dir() {
+            true => std::fs::remove_dir_all(e.path()),
+            false => std::fs::remove_file(e.path()),
+        }
+    };
+    let meta = Path::new(registry::META_FILE);
+    let (meta_dir, meta_file) = (meta.parent().expect("repo.json is in a directory"), meta.file_name().expect("repo.json is a file"));
+    for e in std::fs::read_dir(dir)? {
+        let e = e?;
+        if e.file_name() != meta_dir.as_os_str() {
+            remove(e)?;
+            continue;
+        }
+        for f in std::fs::read_dir(e.path())? {
+            let f = f?;
+            if f.file_name() != meta_file {
+                remove(f)?;
+            }
+        }
+    }
+    registry::sync_dir(dir)
+}
+
 impl Store {
     /// Opens the state directory: the engine checked, the registry read,
     /// and everything a killed writer left cleared, before any request.
@@ -115,6 +153,12 @@ impl Store {
         };
         for m in metas {
             let dir = store.layout.repo(&m.org, &m.repo_id);
+            if m.deleted_at_ms.is_some() {
+                // a delete a crash cut short ends here; done, it is a no-op
+                purge(&dir)?;
+                rec.deleted += 1;
+                continue;
+            }
             recovery::sweep_repo(&dir, &mut rec)?;
             let git = store.engine.repo(&dir)?;
             for (name, oid) in git.refs("refs/macrofiche/tmp/").await? {
@@ -146,7 +190,7 @@ impl Store {
 
     /// Creates a repository (contract 5.1): made in `tmp/`, initialized,
     /// its identity written, then renamed into place whole. A name made
-    /// twice is a 409.
+    /// twice is a 409, and so is a deleted one's (`repository_deleted`).
     pub async fn create_repo(&self, org: &str, name: &str, default_branch: &str, now_ms: i64) -> Result<RepoMeta, StoreError> {
         if !names::valid_org(org) || !names::valid_repo_name(name) {
             return Err(StoreError::invalid("invalid_repo_name", format!("invalid repository name {name:?}")));
@@ -154,8 +198,14 @@ impl Store {
         if !names::valid_branch(default_branch) {
             return Err(StoreError::invalid("invalid_branch", format!("invalid default_branch {default_branch:?}")));
         }
-        if !self.registry.lock().expect("the registry lock").begin(org, name) {
-            return Err(StoreError::conflict("repository_exists", "repository already exists"));
+        {
+            let mut reg = self.registry.lock().expect("the registry lock");
+            if !reg.begin(org, name) {
+                if reg.entry(org, name).is_some_and(|m| m.deleted_at_ms.is_some()) {
+                    return Err(StoreError::conflict("repository_deleted", "repository deleted: its name is not made again"));
+                }
+                return Err(StoreError::conflict("repository_exists", "repository already exists"));
+            }
         }
         let made = self.make_repo(org, name, default_branch, now_ms).await;
         let meta = made.as_ref().ok().cloned();
@@ -169,7 +219,7 @@ impl Store {
         std::fs::create_dir_all(&tmp)?;
         let result = async {
             self.engine.init(&tmp, default_branch).await?;
-            let meta = RepoMeta { repo_id: id.clone(), repo_name: name.into(), org: org.into(), default_branch: default_branch.into(), created_at_ms: now_ms };
+            let meta = RepoMeta { repo_id: id.clone(), repo_name: name.into(), org: org.into(), default_branch: default_branch.into(), created_at_ms: now_ms, deleted_at_ms: None };
             let bytes = serde_json::to_vec_pretty(&meta).expect("a meta serializes");
             repo::write_durably(&tmp.join(registry::META_FILE), &bytes)?;
             std::fs::create_dir_all(self.layout.org(org))?;
@@ -181,6 +231,29 @@ impl Store {
             let _ = std::fs::remove_dir_all(&tmp);
         }
         result
+    }
+
+    /// Deletes the repository `name` (contract 5.13), under its write lock
+    /// so no write is halfway through it: marked deleted in its
+    /// `repo.json` first, durably, then everything else it held removed.
+    /// From then it serves nothing (a write that waited on the lock is
+    /// refused), leaves the org's list, and its name is never made again.
+    pub async fn delete_repo(&self, org: &str, name: &str, now_ms: i64) -> Result<Deleted, StoreError> {
+        let meta = match self.registry.lock().expect("the registry lock").entry(org, name).cloned() {
+            None => return Err(StoreError::not_found("repository_not_found", "repository not found")),
+            Some(m) if m.deleted_at_ms.is_some() => return Ok(Deleted::Already),
+            Some(m) => m,
+        };
+        let h = self.handle(meta.clone())?;
+        // refused only when another delete ran while this one waited
+        let Ok(_w) = h.write().await else { return Ok(Deleted::Already) };
+        let marked = RepoMeta { deleted_at_ms: Some(now_ms), ..meta };
+        repo::write_durably(&h.dir.join(registry::META_FILE), &serde_json::to_vec_pretty(&marked).expect("a meta serializes"))?;
+        h.gone();
+        self.registry.lock().expect("the registry lock").mark_deleted(org, name, now_ms);
+        self.dirty.lock().expect("the dirty lock").remove(&key(org, &marked.repo_id));
+        purge(&h.dir)?;
+        Ok(Deleted::Now(marked))
     }
 
     pub fn repos_page(&self, org: &str, after: Option<(i64, &str)>, limit: usize, q: Option<&str>) -> (Vec<RepoMeta>, bool) {
@@ -238,6 +311,10 @@ impl Store {
         };
         let mut out = Vec::new();
         for (k, meta, written) in due {
+            if self.repo_meta(&meta.org, &meta.repo_name).is_none() {
+                // deleted since it was written
+                continue;
+            }
             let Ok(h) = self.handle(meta) else { continue };
             let Ok(_w) = h.write_lock.try_lock() else { continue };
             let t0 = Instant::now();
