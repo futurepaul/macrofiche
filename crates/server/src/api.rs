@@ -502,6 +502,24 @@ fn pack_answer(status: u16, branch: &str, old: Option<Oid>, new: Option<Oid>, tr
     json(status, &body)
 }
 
+/// What the service says of a commit that would change nothing.
+const NOTHING_TO_COMMIT: &str = "no changes to commit";
+
+/// A write that would change nothing, refused as the service refuses a
+/// commit pack that does (contract 5.8): 412, its body exactly the
+/// service's (read from a preview by fragment PR #163, 2026-10-05), with
+/// no commit and every sha empty. fragment's cell knows it by
+/// `result.status` and `result.message`, and answers the branch's tip.
+fn nothing_to_commit() -> Resp {
+    json(
+        412,
+        &json!({
+            "commit": null,
+            "result": { "target_branch": "", "branch": "", "old_sha": "", "new_sha": "", "success": false, "status": "precondition_failed", "message": NOTHING_TO_COMMIT },
+        }),
+    )
+}
+
 fn pack_refusal(e: &PackError, branch: &str) -> Resp {
     match e.shape() {
         Shape::Problem => problem_resp(&Problem::new(e.status(), "invalid_pack", e.to_string())),
@@ -638,6 +656,7 @@ async fn commit_pack(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> 
     let resp = match outcome {
         CommitOutcome::Committed(c) => pack_answer(201, &c.branch, c.old, Some(c.new), Some(c.tree), total, c.blob_count, "ok", None),
         CommitOutcome::Moved { current } => pack_answer(409, &meta.target_branch, current, current, None, 0, 0, "precondition_failed", Some("expected branch head did not match current tip")),
+        CommitOutcome::Unchanged { .. } => nothing_to_commit(),
     };
     announce(app, h, moved);
     Ok(resp)
@@ -742,6 +761,7 @@ async fn merge(app: &App, h: &Arc<RepoHandle>, req: Request<Incoming>) -> Result
         MergeOutcome::TargetMoved { current, base } => merge_conflict("target_moved", &format!("expected target sha did not match the current tip {current}"), &[], base),
         MergeOutcome::Conflict { base, paths } => merge_conflict("merge_conflict", "merge conflict", &paths, base),
         MergeOutcome::NotFastForward { base } => merge_conflict("not_fast_forward", "not a fast-forward, and the strategy is ff_only", &[], base),
+        MergeOutcome::Unchanged { .. } => nothing_to_commit(),
     };
     announce(app, h, moved);
     Ok(resp)

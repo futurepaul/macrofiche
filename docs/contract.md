@@ -445,6 +445,36 @@ all-zero expected sha means "the branch must not exist". The body:
 With no expected sha, the commit lands on whatever the tip is, and
 creates the branch if it is absent.
 
+**No change.** A pack whose commit would change nothing is refused,
+never made as an empty commit: its tree is the tip's (the bytes the
+branch holds, deletes of absent paths, no files at all). On a branch it
+would create, its tree is empty (deletes alone), or `base_branch`'s when
+one is named. The answer is 412, its body exactly the service's, with no
+commit and every sha empty:
+
+```json
+{"commit": null,
+ "result": {"target_branch": "", "branch": "", "old_sha": "", "new_sha": "",
+            "success": false, "status": "precondition_failed", "message": "no changes to commit"}}
+```
+
+- Added 2026-10-06 from fragment PR #163, which read this answer from a
+  preview on 2026-10-05 (`crates/core/src/codestorage.rs`,
+  `nothing_to_commit`, and the fake since then). The service's OpenAPI
+  lists no 412 for this route.
+- It is checked after the compare-and-swap, as the fake orders them: a
+  stale pack is 409 whatever it changes. The service's order is not
+  pinned down; either way the cell ends at main's tip (a 409 reads the
+  head again and rebuilds, and the rebuilt pack is the 412).
+- A file's mode counts: a pack that changes only a mode commits (git's
+  tree; the fake compares bytes, and fragment writes only `100644`).
+- The cell reads it (`result.status` and `result.message`) as "main
+  holds these files already" and answers main's tip (`cell/src/cs.rs`,
+  `Packed::Unchanged`; `cell/src/files.rs`): a keyed write replayed
+  after its answer was lost, a write of the bytes main holds, a
+  template's second seed. e2e `templates` checks the first two.
+- Nothing moves, so nothing is announced.
+
 **201:**
 
 ```json
@@ -460,10 +490,12 @@ Fragment accepts 200 or 201, and reads `result.success == true` and
 
 - One commit. Its parent is the old tip; a branch's first commit has
   none. Its tree is the old tree plus the upserts, minus the deletes.
-- Deleting an absent path does nothing (fake `304-315`).
+- Deleting an absent path does nothing (fake `304-315`); a pack of
+  nothing else changes nothing, and is the 412 above.
 - The commit's time is the server's clock.
 - The branch move is announced by webhook after the answer (section 6).
-- An empty change list never comes from fragment.
+- An empty change list never comes from fragment. It changes nothing:
+  the same 412.
 
 **How the clients react.**
 
@@ -789,6 +821,7 @@ then gets raw bytes of any size.
 | merge when diverged | merge commit with the source's tree (git's three-way merge after PR #127) | a real merge; 409 on conflict | service (section 15) |
 | restore commit parents | old tip and base | not documented | old tip only |
 | restore to the tip, or with no change | 201 (412 after PR #127) | 412 | service |
+| a commit pack that changes nothing | an empty commit (412 after PR #163) | 412 `no changes to commit` | service |
 | commit history | first parents, `limit` 30 | date order, `limit` 20 | question 4 |
 | ephemeral refs | flagged in the branch map | own namespace | service |
 | `files/metadata` default `limit` | 1000 | 200 | service |
@@ -989,6 +1022,12 @@ the CLI cannot (`cli/src/main.rs:1772`).
     (`conflict_type` or `code` equal to `merge_conflict`), and fails a
     conflict instead of retrying it.
   - The answer's `target.new_sha` is still what fragment reads.
+  - A squash (`squash: true`) whose tree is the target's would be a
+    one-parent commit that changes nothing. macrofiche refuses it with
+    5.8's 412 body, and moves nothing. The service's documents do not
+    say; fragment never squashes. A merge commit whose tree is the
+    target's is still made: its second parent records the merge, as
+    git's does, and the fake makes one too.
 - **Restore (5.11)**, now also called by every deploy after a rollback:
   - 412 when the branch already points at `base_ref`, when `base_ref` is
     not an ancestor of the tip (an unknown one included), or when the
