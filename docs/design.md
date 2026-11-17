@@ -454,6 +454,53 @@ inflated, at most 256 MiB.
 - **A clone** streams `upload-pack`'s pack to the client as it is made;
   a client gone ends the process group.
 
+## Import
+
+A box that kept its apps' repositories somewhere else first (fragment's
+dev stack keeps them in its code.storage fake) carries them in with
+`macrofiche import`: one repository at a time, from a fast-import
+stream (git's own interchange format, `git fast-export`'s), while
+nothing serves the state directory. Its clients (fragment's cell, an
+agent's sync) keep what they knew the repository by:
+
+- **Its url form.** `--url` keeps the url form its clients hold when it
+  was not its name (the fake names a repository by a UUID); `repo.json`
+  records it as `url`, and every repo-scoped call, the org's list,
+  `repo-urls`, smart HTTP and the webhook use it. A repository made here
+  has none, and is called by its name (the service's). A name, a url
+  form and an id are each taken for good, deleted ones too: no create
+  or import makes another repository answer to one.
+- **Its id.** `--repo-id` keeps the id `repo-urls` was asked by.
+- **Its commit ids.** Where the old store's ids are not git's (the
+  fake's are not), the stream writes `refs/macrofiche/legacy/<old id>`
+  at each commit. A ref a call names by a sha that is no object here
+  resolves through them (`RepoHandle::resolve`), and a write's expected
+  head (a commit pack's, a merge's, a restore's) matches the commit an
+  old id names: a client holding an old pin reads and writes as before,
+  and is answered with git's ids from then on. `transfer.hideRefs` keeps
+  them out of smart HTTP.
+
+The stream is read before git sees it (`crates/store/src/stream.rs`):
+each command, its data blocks skipped by count or delimiter, and each
+ref a `commit` or `reset` names, against an allowlist; git takes names
+an import must not write (a root ref such as `ORIG_HEAD`, or `shallow`,
+which hides history from every walk and passes fsck), so they are
+refused there, and so are tags, `option`, every `feature` but `done`,
+and the commands that read back. Then the import runs `git fast-import
+--done` jailed, under the maintenance limits, into a repository made in
+`tmp/`, and checks what it made: branches (`refs/heads/` and the
+ephemeral namespace) and legacy ids alone, each a commit; nothing in the
+repository beside its objects, refs and config; and any other ref, a legacy id that is an
+object the repository holds (an alias is only for an id that is not: a
+real commit's id is always that commit, for a read as for a write's
+expected head), a HEAD that is not the default branch, a stream cut
+before `done`, or an `fsck --strict` fault is refused with nothing kept. Then it is renamed into place whole, as a
+create is; its last-commit index is rebuilt as a commit macrofiche did
+not write is (The last-commit index).
+
+An import holds the state directory's lock as `serve` does (Recovery and
+maintenance): beside a running macrofiche it is refused, never raced.
+
 ## Config and command line
 
 `macrofiche serve --config <file>` reads one JSON file, checked at start
@@ -491,7 +538,10 @@ or SIGINT stops it accepting and gives requests in flight 15 s.
 `macrofiche check --config <file>` reads a config, its keys and its
 secrets, and prints what it would serve; `macrofiche pubkey <pkcs8.pem>`
 prints the SPKI PEM of fragment's `CODESTORAGE_PRIVATE_KEY` for a
-config's `keys`; `macrofiche version` names the pinned git.
+config's `keys`; `macrofiche import --config <file> --org <org> --name
+<name> [--url <url form>] [--repo-id <id>] [--created-at-ms <ms>]
+[--default-branch <b>] <stream>` imports one repository (Import), printing
+`{"event":"imported",…}`; `macrofiche version` names the pinned git.
 
 ## Dependencies
 
@@ -703,6 +753,12 @@ holds commits nothing" and its "main moves" check).
 ## Debt
 
 *This list is macrofiche's ledger: each item stays here until it is paid.*
+
+- An imported repository's legacy commit ids (Import) are refs kept for
+  good, one per commit the old store made, so a client holding an old
+  id is answered however long it waits. Remove them once fragment's
+  cells hold git's ids for every pin (each fragment's pins moved by a
+  refresh or the poll since its import).
 
 - Smart HTTP serves no Git LFS batch API (question 5: not worth it
   until computers' agents push large files with `git lfs`), no

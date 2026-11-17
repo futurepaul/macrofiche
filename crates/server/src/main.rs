@@ -6,6 +6,10 @@
 //!   secrets, and print what it serves.
 //! - `pubkey <pkcs8.pem>`: the SPKI PEM of a P-256 private key's public
 //!   half (fragment's `CODESTORAGE_PRIVATE_KEY`), for a config's keys.
+//! - `import --config <path> --org <org> --name <name> [--url <url form>]
+//!   [--repo-id <id>] [--created-at-ms <ms>] [--default-branch <b>] <stream>`:
+//!   a repository made elsewhere, from a fast-import stream, while nothing
+//!   serves the state (docs/design.md, Import), printing what it made.
 //! - `version`: macrofiche's version and the git it is pinned to.
 
 use std::path::PathBuf;
@@ -14,7 +18,7 @@ use std::process::ExitCode;
 use macrofiche::config::Config;
 
 fn usage() -> ExitCode {
-    eprintln!("usage: macrofiche serve --config <path> | check --config <path> | pubkey <private-key.pem> | version");
+    eprintln!("usage: macrofiche serve --config <path> | check --config <path> | pubkey <private-key.pem> | import --config <path> --org <org> --name <name> [--url <url>] [--repo-id <id>] [--created-at-ms <ms>] [--default-branch <b>] <stream> | version");
     ExitCode::from(2)
 }
 
@@ -80,6 +84,40 @@ fn main() -> ExitCode {
                 }
                 Err(e) => {
                     eprintln!("macrofiche: {path}: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        Some("import") => {
+            let (Some(path), Some(org), Some(name), Some(stream)) = (flag("--config"), flag("--org"), flag("--name"), args.last().filter(|a| !a.starts_with("--")).cloned()) else { return usage() };
+            let created_at_ms = match flag("--created-at-ms").map(|v| v.parse::<i64>()) {
+                None => std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0),
+                Some(Ok(ms)) if ms >= 0 => ms,
+                Some(_) => return usage(),
+            };
+            let (url, repo_id, branch) = (flag("--url"), flag("--repo-id"), flag("--default-branch").unwrap_or_else(|| "main".into()));
+            let config = match Config::read(path.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("macrofiche: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let req = macrofiche_store::Import { org: &org, name: &name, url: url.as_deref(), repo_id: repo_id.as_deref(), default_branch: &branch, created_at_ms, stream: stream.as_ref() };
+            let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("macrofiche: a runtime: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            match rt.block_on(macrofiche::import(config, exe, &req)) {
+                Ok(made) => {
+                    println!("{}", serde_json::json!({ "event": "imported", "imported": made }));
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("macrofiche: import {name}: {e}");
                     ExitCode::FAILURE
                 }
             }

@@ -1,10 +1,15 @@
 //! Where things live under the state directory, and the registry of
 //! repositories: each one's identity in its own `macrofiche/repo.json`,
-//! read at boot into maps by name and by id (macrofiche is the only
-//! writer, so memory is the truth while it runs). A repository's
+//! read at boot into maps by name, by url form and by id (macrofiche is
+//! the only writer, so memory is the truth while it runs). A repository's
 //! directory is named by its id, never its name. A deleted repository
-//! keeps its `repo.json`, marked, and nothing else: its name is never made
-//! again (contract 5.13).
+//! keeps its `repo.json`, marked, and nothing else: its name and its url
+//! form are never made again (contract 5.13).
+//!
+//! A repository's url form, which every repo-scoped call names, is its
+//! name (the service's: contract, question 1), unless it was imported
+//! from a store that named it otherwise (`RepoMeta::url`, docs/design.md,
+//! Import): then it keeps the url form its clients hold.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -36,7 +41,7 @@ impl Layout {
     pub fn spool(&self) -> PathBuf {
         self.state.join("spool")
     }
-    /// Held while a process serves the state directory.
+    /// Held while a process serves or imports into the state directory.
     pub fn lock(&self) -> PathBuf {
         self.state.join("macrofiche.lock")
     }
@@ -58,6 +63,19 @@ pub struct RepoMeta {
     /// org's list, and its name stays taken.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at_ms: Option<i64>,
+    /// The url form it was known by in the store it was imported from,
+    /// when that was not its name (fragment's code.storage fake names
+    /// repos by a UUID): its clients keep calling it by that.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+impl RepoMeta {
+    /// The url form every repo-scoped call names: its name, unless an
+    /// import kept another.
+    pub fn url(&self) -> &str {
+        self.url.as_deref().unwrap_or(&self.repo_name)
+    }
 }
 
 pub const META_FILE: &str = "macrofiche/repo.json";
@@ -68,6 +86,8 @@ pub const META_FILE: &str = "macrofiche/repo.json";
 pub struct Registry {
     by_name: HashMap<(String, String), RepoMeta>,
     by_id: HashMap<(String, String), String>,
+    /// Url form to name: every repository's, its name when it kept none.
+    by_url: HashMap<(String, String), String>,
     /// Names being created now: a second create of one waits for none,
     /// it is a 409 at once.
     creating: Vec<(String, String)>,
@@ -106,7 +126,27 @@ impl Registry {
 
     pub fn insert(&mut self, m: RepoMeta) {
         self.by_id.insert((m.org.clone(), m.repo_id.clone()), m.repo_name.clone());
+        self.by_url.insert((m.org.clone(), m.url().to_string()), m.repo_name.clone());
         self.by_name.insert((m.org.clone(), m.repo_name.clone()), m);
+    }
+
+    /// The repository whose url form is `url`, deleted or not.
+    pub fn entry_by_url(&self, org: &str, url: &str) -> Option<&RepoMeta> {
+        let name = self.by_url.get(&(org.to_string(), url.to_string()))?;
+        self.entry(org, name)
+    }
+
+    /// The repository whose url form is `url`, unless it was deleted: what
+    /// a repo-scoped call names.
+    pub fn by_url(&self, org: &str, url: &str) -> Option<&RepoMeta> {
+        self.entry_by_url(org, url).filter(|m| m.deleted_at_ms.is_none())
+    }
+
+    /// Whether `s` is any repository's name or url form in `org`, or a
+    /// name being made: taken for a new name, and for an import's url form.
+    fn taken(&self, org: &str, s: &str) -> bool {
+        let key = (org.to_string(), s.to_string());
+        self.by_name.contains_key(&key) || self.by_url.contains_key(&key) || self.creating.contains(&key)
     }
 
     /// The repository named `name`, deleted or not.
@@ -131,10 +171,11 @@ impl Registry {
         m.deleted_at_ms = Some(at_ms);
     }
 
-    /// Claims `name` for a create: false when it exists or is being made.
+    /// Claims `name` for a create: false when it exists or is being made,
+    /// or is another repository's url form (its url form is its name).
     pub fn begin(&mut self, org: &str, name: &str) -> bool {
         let key = (org.to_string(), name.to_string());
-        if self.by_name.contains_key(&key) || self.creating.contains(&key) {
+        if self.taken(org, name) {
             return false;
         }
         if self.by_name.keys().filter(|(o, _)| o == org).count() >= REPOS_PER_ORG_MAX {
@@ -150,6 +191,16 @@ impl Registry {
         if let Some(m) = made {
             self.insert(m);
         }
+    }
+
+    /// Claims an import's `name` and the url form it keeps (`url`, when
+    /// not its name) and its id: false when any is taken, as a name, a url
+    /// form or an id, deleted ones included. Ended by `end` with its name.
+    pub fn begin_import(&mut self, org: &str, name: &str, url: Option<&str>, id: &str) -> bool {
+        if url.is_some_and(|u| u == name || self.taken(org, u)) || self.by_id.contains_key(&(org.to_string(), id.to_string())) {
+            return false;
+        }
+        self.begin(org, name)
     }
 
     /// An org's repositories newest first (by creation, then id), after
@@ -207,7 +258,34 @@ mod tests {
     use super::*;
 
     fn meta(org: &str, name: &str, id: &str, ms: i64) -> RepoMeta {
-        RepoMeta { repo_id: id.into(), repo_name: name.into(), org: org.into(), default_branch: "main".into(), created_at_ms: ms, deleted_at_ms: None }
+        RepoMeta { repo_id: id.into(), repo_name: name.into(), org: org.into(), default_branch: "main".into(), created_at_ms: ms, deleted_at_ms: None, url: None }
+    }
+
+    // Goal: an imported repository is served by the url form its clients
+    // hold (not its name), and that url form, its name and its id are
+    // each taken: no create or import makes another repository answer to
+    // one of them. Method: one imported, then each collision tried.
+    #[test]
+    fn an_imported_url_form_is_served_and_taken() {
+        let mut r = Registry::default();
+        r.insert(meta("o", "plain", "p", 1));
+        let imported = RepoMeta { url: Some("0f3c2a1e-aaaa-bbbb-cccc-000000000001".into()), ..meta("o", "todo--abc", "i", 2) };
+        assert!(r.begin_import("o", "todo--abc", imported.url.as_deref(), "i"));
+        r.end("o", "todo--abc", Some(imported.clone()));
+        assert_eq!(r.by_url("o", "0f3c2a1e-aaaa-bbbb-cccc-000000000001").map(|m| m.repo_id.as_str()), Some("i"), "served by its url form");
+        assert!(r.by_url("o", "todo--abc").is_none(), "not by its name: its clients call it by its url form");
+        assert_eq!(r.by_url("o", "plain").map(|m| m.repo_id.as_str()), Some("p"), "a repository made here is called by its name");
+        assert_eq!(imported.url(), "0f3c2a1e-aaaa-bbbb-cccc-000000000001");
+        assert!(!r.begin("o", "0f3c2a1e-aaaa-bbbb-cccc-000000000001"), "a new name that is an imported url form");
+        assert!(!r.begin("o", "todo--abc"), "the imported name");
+        assert!(!r.begin_import("o", "other", Some("plain"), "x"), "a url form that is a name");
+        assert!(!r.begin_import("o", "other", Some("0f3c2a1e-aaaa-bbbb-cccc-000000000001"), "x"), "a url form taken");
+        assert!(!r.begin_import("o", "other", None, "p"), "an id taken");
+        assert!(!r.begin_import("o", "same", Some("same"), "x"), "a url form that is its own name is no url form of its own");
+        assert!(r.begin_import("o", "other", Some("1f3c2a1e"), "x"));
+        r.mark_deleted("o", "todo--abc", 9);
+        assert!(r.by_url("o", "0f3c2a1e-aaaa-bbbb-cccc-000000000001").is_none(), "deleted, it serves nothing");
+        assert!(!r.begin("o", "0f3c2a1e-aaaa-bbbb-cccc-000000000001"), "and its url form stays taken");
     }
 
     // Goal: pages run newest first and a page's last names where the next

@@ -145,7 +145,7 @@ async fn route(app: &App, req: Request<Incoming>) -> Result<Resp, Problem> {
         authorize(&c, Scope::OrgRead, None).map_err(|e| e.problem())?;
         let id = macrofiche_contract::query::decode_segment(id).map_err(|e| bad("invalid_path", e.to_string()))?;
         let m = app.store.repo_by_id(&c.org, &id).ok_or_else(|| Problem::not_found("repository_not_found", "repository not found"))?;
-        return Ok(json(200, &json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "url": m.repo_name })));
+        return Ok(json(200, &json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "url": m.url() })));
     }
     if let Some(seg) = path.strip_prefix("/api/repos/").filter(|p| !p.contains('/') && method == Method::DELETE) {
         let name = macrofiche_contract::query::decode_segment(seg).map_err(|e| bad("invalid_path", e.to_string()))?;
@@ -263,7 +263,7 @@ async fn create_repo(app: &App, c: &Claims, q: &Query, req: Request<Incoming>) -
     let default_branch = opt_str(&body, "default_branch")?.or(q.get("default_branch")).filter(|b| !b.is_empty()).unwrap_or("main");
     let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
     let m = app.store.create_repo(&c.org, &claim, default_branch, now_ms).await.map_err(store_err)?;
-    Ok(json(200, &json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "http_url": m.repo_name, "message": "repository created" })))
+    Ok(json(200, &json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "http_url": m.url(), "message": "repository created" })))
 }
 
 fn list_repos(app: &App, c: &Claims, q: &Query) -> Result<Resp, Problem> {
@@ -280,7 +280,7 @@ fn list_repos(app: &App, c: &Claims, q: &Query) -> Result<Resp, Problem> {
     let (page, more) = app.store.repos_page(&c.org, after.as_ref().map(|(ms, id)| (*ms, id.as_str())), limit, filter.as_deref());
     let repos: Vec<Value> = page
         .iter()
-        .map(|m| json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "url": m.repo_name, "default_branch": m.default_branch, "created_at": rfc3339(m.created_at_ms.div_euclid(1000)) }))
+        .map(|m| json!({ "repo_id": m.repo_id, "repo_name": m.repo_name, "url": m.url(), "default_branch": m.default_branch, "created_at": rfc3339(m.created_at_ms.div_euclid(1000)) }))
         .collect();
     let mut body = json!({ "repos": repos, "has_more": more });
     if more {
@@ -574,6 +574,7 @@ pub fn announce_moves(app: &App, h: &RepoHandle, moved: Vec<Moved>) {
             org: &h.meta.org,
             repo_id: &h.meta.repo_id,
             repo_name: &h.meta.repo_name,
+            url: h.meta.url(),
             ref_name: &m.ref_name,
             before: hex(m.before),
             after: m.after.to_string(),

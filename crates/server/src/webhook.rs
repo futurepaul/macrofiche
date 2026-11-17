@@ -44,6 +44,8 @@ pub struct Push<'a> {
     pub org: &'a str,
     pub repo_id: &'a str,
     pub repo_name: &'a str,
+    /// Its url form: its name, unless an import kept another.
+    pub url: &'a str,
     pub ref_name: &'a str,
     pub before: String,
     pub after: String,
@@ -54,7 +56,7 @@ pub fn body(p: &Push<'_>) -> Vec<u8> {
     json!({
         "type": "push",
         "org": p.org,
-        "repository": { "repo_id": p.repo_id, "repo_name": p.repo_name, "url": p.repo_name, "id": p.repo_id },
+        "repository": { "repo_id": p.repo_id, "repo_name": p.repo_name, "url": p.url, "id": p.repo_id },
         "ref": p.ref_name,
         "before": p.before,
         "after": p.after,
@@ -192,7 +194,7 @@ mod tests {
     // body, read back.
     #[test]
     fn the_body_is_the_union() {
-        let b = body(&Push { org: "fragment-dev", repo_id: "abc", repo_name: "todo--paul", ref_name: "refs/heads/main", before: "0".repeat(40), after: "1".repeat(40), pushed_at: "2026-10-03T12:00:00Z".into() });
+        let b = body(&Push { org: "fragment-dev", repo_id: "abc", repo_name: "todo--paul", url: "todo--paul", ref_name: "refs/heads/main", before: "0".repeat(40), after: "1".repeat(40), pushed_at: "2026-10-03T12:00:00Z".into() });
         let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
         assert_eq!(v["ref"], "refs/heads/main");
         assert_eq!(v["repository"]["url"], "todo--paul");
