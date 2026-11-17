@@ -65,6 +65,19 @@ where
         .await;
 }
 
+/// Imports one repository into `config`'s state directory (docs/design.md,
+/// Import), while nothing serves it: the state's lock is taken, so an
+/// import beside a running macrofiche is refused, never raced.
+pub async fn import(config: Config, exe: PathBuf, req: &macrofiche_store::Import<'_>) -> Result<macrofiche_store::Imported, String> {
+    let mut settings = Settings::linux(config.git_prefix(&exe));
+    settings.enforce = config.jail == JailMode::Enforce;
+    if !config.orgs.iter().any(|o| o.name == req.org) {
+        return Err(format!("{} is no org of this config: its tokens would be verified by no key", req.org));
+    }
+    let (store, _) = Store::open(config.state_dir.clone(), settings).await.map_err(|e| e.to_string())?;
+    store.import_repo(req).await.map_err(|e| e.to_string())
+}
+
 /// Serves `config` until SIGTERM or SIGINT. `exe` is this binary's path
 /// (the engine is found beside it unless the config names one).
 pub async fn serve(config: Config, exe: PathBuf) -> Result<(), String> {

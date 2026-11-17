@@ -219,6 +219,48 @@ impl Repo {
         Oid::parse(&id).ok_or_else(|| GitError::Protocol { op, detail: format!("get-mark answered {id:?}") })
     }
 
+    /// A whole history from a fast-import stream in the file `stream`
+    /// (git's own interchange format: `git fast-export`'s), into this
+    /// repository, under the maintenance limits: an import of a repository
+    /// made elsewhere (docs/design.md, Import). The stream must end in
+    /// `done` (`--done`), so a cut one fails rather than landing half; one
+    /// that asks for files of its own (`feature export-marks`, `import-marks`)
+    /// is refused by git itself without `--allow-unsafe-features`, and the
+    /// jail keeps it to this repository's directory.
+    pub async fn import_stream(&self, stream: &Path) -> Result<(), GitError> {
+        let op = "fast-import";
+        let io = |source| GitError::Io { op, source };
+        let bytes = std::fs::metadata(stream).map_err(io)?.len();
+        let deadline = write_deadline(bytes).max(MAINTENANCE_DEADLINE);
+        let mut proc = self
+            .spawn(op, &["fast-import", "--quiet", "--done", "--date-format=raw", "--big-file-threshold=1m"], &[], Limits::MAINTENANCE, Pipes { stdin: true, stdout: false })
+            .await?;
+        let mut input = proc.stdin().expect("piped");
+        let mut err = proc.stderr().expect("piped");
+        // the pipe is closed once the file is copied (`input` dropped): a
+        // stream cut before `done` then ends in git's refusal, never a wait
+        let feed = async move {
+            let mut f = tokio::fs::File::open(stream).await?;
+            tokio::io::copy(&mut f, &mut input).await?;
+            input.shutdown().await?;
+            drop(input);
+            Ok::<(), std::io::Error>(())
+        };
+        let read_err = async {
+            let mut buf = Vec::new();
+            let r = (&mut err).take(STDERR_KEPT_BYTES as u64).read_to_end(&mut buf).await;
+            let _ = tokio::io::copy(&mut err, &mut tokio::io::sink()).await;
+            r.map(|_| buf)
+        };
+        let (fed, stderr) = tokio::time::timeout(deadline, async { tokio::join!(feed, read_err) }).await.map_err(|_| GitError::Timeout { op, after: deadline })?;
+        let status = tokio::time::timeout(deadline, proc.wait()).await.map_err(|_| GitError::Timeout { op, after: deadline })??;
+        let stderr = String::from_utf8_lossy(&stderr.map_err(io)?).into_owned();
+        if !status.success() {
+            return Err(GitError::Failed { op, code: status.code().unwrap_or(-1), stderr });
+        }
+        fed.map_err(io)
+    }
+
     /// One `update-ref --stdin` transaction: all of `ops` or none.
     /// `Ok(Err(_))` is git's refusal, read from its stderr.
     pub async fn update_refs(&self, ops: &[RefOp]) -> Result<Result<(), RefRefusal>, GitError> {

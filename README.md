@@ -60,7 +60,8 @@ target/release/macrofiche-bench all --write   # docs/evidence/*.json
 Running it: `macrofiche serve --config <file>` (docs/design.md, Config
 and command line; `macrofiche check --config <file>` reads one,
 `macrofiche pubkey <pkcs8.pem>` derives an org's public key from the
-private key fragment holds). It needs Linux with Landlock (5.13; 6.7 for
+private key fragment holds; `macrofiche import` carries in a repository
+kept elsewhere, from a fast-import stream: docs/design.md, Import). It needs Linux with Landlock (5.13; 6.7 for
 its TCP rules) and no root.
 
 `cargo xtask engine` downloads git's release tarball from kernel.org,

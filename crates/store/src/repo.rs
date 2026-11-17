@@ -30,6 +30,11 @@ pub const LISTING_CACHE_ENTRIES: u64 = 500_000;
 pub const COMMIT_CACHE_ENTRIES: u64 = 20_000;
 /// The namespace of ephemeral refs (the service's).
 pub const EPHEMERAL_PREFIX: &str = "refs/namespaces/ephemeral/refs/heads/";
+/// An imported commit's id in the store it came from, when that was not
+/// git's (docs/design.md, Import): `refs/macrofiche/legacy/<old id>` names
+/// the commit, so a client holding the old id is answered by it.
+/// `transfer.hideRefs` keeps them out of smart HTTP.
+pub const LEGACY_PREFIX: &str = "refs/macrofiche/legacy/";
 
 /// The identity a write that names none commits as.
 pub fn default_ident() -> Ident {
@@ -338,7 +343,7 @@ impl RepoHandle {
         if names::is_sha(rev) {
             return match self.info(&format!("{rev}^{{commit}}")).await? {
                 Some(i) => Ok(Some(i.oid)),
-                None => Ok(None),
+                None => self.legacy(rev).await,
             };
         }
         if !names::valid_branch(rev) {
@@ -351,6 +356,22 @@ impl RepoHandle {
             return Ok(None);
         }
         Ok(self.info(&format!("refs/tags/{rev}^{{commit}}")).await?.map(|i| i.oid))
+    }
+
+    /// The commit an imported repository's legacy id `old` names
+    /// (`LEGACY_PREFIX`), or `None`: asked only once `old` is no object here.
+    pub async fn legacy(&self, old: &str) -> Result<Option<Oid>, StoreError> {
+        if !names::is_sha(old) {
+            return Ok(None);
+        }
+        Ok(self.info(&format!("{LEGACY_PREFIX}{old}^{{commit}}")).await?.map(|i| i.oid))
+    }
+
+    /// Whether `tip` is the commit a write expected (`x`, a sha): itself,
+    /// or the commit a legacy id names, as a client of the store it was
+    /// imported from holds it.
+    async fn expects(&self, x: &str, tip: Oid) -> Result<bool, StoreError> {
+        Ok(tip.to_string() == x || self.legacy(x).await? == Some(tip))
     }
 
     /// A commit, read and cached.
@@ -627,10 +648,11 @@ impl RepoHandle {
         let _w = self.write().await?;
         let refname = ref_name(&meta.target_branch, meta.ephemeral);
         let tip = self.ref_tip(&refname).await?;
-        let matches = match &meta.expected {
-            Expected::Any => true,
-            Expected::Absent => tip.is_none(),
-            Expected::At(x) => tip.is_some_and(|t| t.to_string() == *x),
+        let matches = match (&meta.expected, tip) {
+            (Expected::Any, _) => true,
+            (Expected::Absent, tip) => tip.is_none(),
+            (Expected::At(x), Some(t)) => self.expects(x, t).await?,
+            (Expected::At(_), None) => false,
         };
         if !matches {
             return Ok((CommitOutcome::Moved { current: tip }, None));
@@ -748,8 +770,10 @@ impl RepoHandle {
         let refname = ref_name(&req.target, req.target_ephemeral);
         let old = self.ref_tip(&refname).await?.ok_or_else(|| StoreError::not_found("branch_not_found", format!("branch not found: {}", req.target)))?;
         let source = self.resolve(&req.source, req.source_ephemeral).await?.ok_or_else(|| StoreError::not_found("ref_not_found", format!("source_ref not found: {}", req.source)))?;
-        if req.expected.is_some_and(|e| e != old) {
-            return Ok((MergeOutcome::TargetMoved { current: old, base: None }, None));
+        if let Some(e) = req.expected {
+            if !self.expects(&e.to_string(), old).await? {
+                return Ok((MergeOutcome::TargetMoved { current: old, base: None }, None));
+            }
         }
         let (base, d) = self.decide(old, source, req.allow_unrelated).await?;
         let done = |kind, new, tree, promoted| MergeOutcome::Done(MergeDone { kind, old, new, tree, base, source, promoted });
@@ -813,7 +837,7 @@ impl RepoHandle {
         let matches = match expected {
             Expected::Any => true,
             Expected::Absent => false,
-            Expected::At(x) => tip.to_string() == *x,
+            Expected::At(x) => self.expects(x, tip).await?,
         };
         if !matches {
             return Ok((RestoreOutcome::Moved { current: tip }, None));

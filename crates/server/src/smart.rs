@@ -77,8 +77,8 @@ impl Service {
 }
 
 /// A smart-HTTP path: `/<repo>.git/info/refs`, `/<repo>.git/git-upload-pack`,
-/// `/<repo>.git/git-receive-pack`, the repository's name (which may hold
-/// `/`) percent-decoded once.
+/// `/<repo>.git/git-receive-pack`, the repository's url form (its name,
+/// which may hold `/`, unless an import kept another) percent-decoded once.
 pub fn parse_path(path: &str) -> Option<(String, &str)> {
     let (repo, op) = path.strip_prefix('/')?.rsplit_once(".git/")?;
     if !matches!(op, "info/refs" | "git-upload-pack" | "git-receive-pack") || repo.is_empty() {

@@ -43,7 +43,7 @@ pub const MAINTENANCE_TASKS: &[&str] = &["geometric-repack", "loose-objects", "p
 
 pub struct Store {
     /// The state directory's lock, held while this store is open: one
-    /// process at a time serves a state directory.
+    /// process at a time serves or imports into a state directory.
     _lock: std::fs::File,
     layout: Layout,
     engine: Engine,
@@ -71,8 +71,35 @@ fn key(org: &str, id: &str) -> String {
     format!("{org}/{id}")
 }
 
+/// An id an import keeps (the store it came from chose it) is at most this.
+pub const REPO_ID_BYTES_MAX: usize = 64;
+
+/// One repository to import (`Store::import_repo`).
+pub struct Import<'a> {
+    pub org: &'a str,
+    pub name: &'a str,
+    /// The url form its clients call it by, when not its name.
+    pub url: Option<&'a str>,
+    /// The id it had, kept; else a new one.
+    pub repo_id: Option<&'a str>,
+    pub default_branch: &'a str,
+    pub created_at_ms: i64,
+    /// A fast-import stream, ending in `done`.
+    pub stream: &'a Path,
+}
+
+/// What an import made.
+#[derive(Clone, Debug, Serialize)]
+pub struct Imported {
+    pub meta: RepoMeta,
+    /// Each branch, at its commit.
+    pub branches: Vec<(String, String)>,
+    /// The legacy commit ids it answers to (`refs/macrofiche/legacy/`).
+    pub legacy: usize,
+}
+
 /// Takes the state directory's lock, exclusively and at once: refused
-/// while another process holds it (it serves there). A POSIX
+/// while another process holds it (it serves, or imports, there). A POSIX
 /// record lock: held by this process, never by a child it forks (git's
 /// processes), and let go by the kernel however the process ends. It does
 /// not tell two opens in one process apart (only tests make those).
@@ -88,7 +115,7 @@ fn lock_state(path: &Path) -> Result<std::fs::File, StoreError> {
     if r != 0 {
         let e = std::io::Error::last_os_error();
         return Err(match e.raw_os_error() {
-            Some(libc::EAGAIN | libc::EACCES) => StoreError::Unavailable(format!("{} is held: another macrofiche serves this state directory", path.display())),
+            Some(libc::EAGAIN | libc::EACCES) => StoreError::Unavailable(format!("{} is held: another macrofiche serves or imports into this state directory", path.display())),
             _ => e.into(),
         });
     }
@@ -251,7 +278,7 @@ impl Store {
         std::fs::create_dir_all(&tmp)?;
         let result = async {
             self.engine.init(&tmp, default_branch).await?;
-            let meta = RepoMeta { repo_id: id.clone(), repo_name: name.into(), org: org.into(), default_branch: default_branch.into(), created_at_ms: now_ms, deleted_at_ms: None };
+            let meta = RepoMeta { repo_id: id.clone(), repo_name: name.into(), org: org.into(), default_branch: default_branch.into(), created_at_ms: now_ms, deleted_at_ms: None, url: None };
             let bytes = serde_json::to_vec_pretty(&meta).expect("a meta serializes");
             repo::write_durably(&tmp.join(registry::META_FILE), &bytes)?;
             std::fs::create_dir_all(self.layout.org(org))?;
@@ -265,13 +292,14 @@ impl Store {
         result
     }
 
-    /// Deletes the repository `name` (contract 5.13), under its write lock
-    /// so no write is halfway through it: marked deleted in its
-    /// `repo.json` first, durably, then everything else it held removed.
-    /// From then it serves nothing (a write that waited on the lock is
-    /// refused), leaves the org's list, and its name is never made again.
-    pub async fn delete_repo(&self, org: &str, name: &str, now_ms: i64) -> Result<Deleted, StoreError> {
-        let meta = match self.registry.lock().expect("the registry lock").entry(org, name).cloned() {
+    /// Deletes the repository whose url form is `url` (contract 5.13),
+    /// under its write lock so no write is halfway through it: marked
+    /// deleted in its `repo.json` first, durably, then everything else it
+    /// held removed. From then it serves nothing (a write that waited on
+    /// the lock is refused), leaves the org's list, and its name is never
+    /// made again.
+    pub async fn delete_repo(&self, org: &str, url: &str, now_ms: i64) -> Result<Deleted, StoreError> {
+        let meta = match self.registry.lock().expect("the registry lock").entry_by_url(org, url).cloned() {
             None => return Err(StoreError::not_found("repository_not_found", "repository not found")),
             Some(m) if m.deleted_at_ms.is_some() => return Ok(Deleted::Already),
             Some(m) => m,
@@ -282,10 +310,95 @@ impl Store {
         let marked = RepoMeta { deleted_at_ms: Some(now_ms), ..meta };
         repo::write_durably(&h.dir.join(registry::META_FILE), &serde_json::to_vec_pretty(&marked).expect("a meta serializes"))?;
         h.gone();
-        self.registry.lock().expect("the registry lock").mark_deleted(org, name, now_ms);
+        self.registry.lock().expect("the registry lock").mark_deleted(org, &marked.repo_name, now_ms);
         self.dirty.lock().expect("the dirty lock").remove(&key(org, &marked.repo_id));
         purge(&h.dir)?;
         Ok(Deleted::Now(marked))
+    }
+
+    /// Imports a repository made elsewhere (docs/design.md, Import): its
+    /// whole history from `stream`, a fast-import stream, into a new
+    /// repository named `name`, made in `tmp/` and renamed into place whole
+    /// as a create is. It may keep the url form and id it was known by
+    /// (`url`, `repo_id`), each refused when taken. The stream may write
+    /// branches (`refs/heads/`, the ephemeral namespace) and the legacy ids
+    /// of its commits (`refs/macrofiche/legacy/<40 hex>`, each a commit);
+    /// any other ref, or a repository `fsck --strict` faults, is refused
+    /// and nothing is kept.
+    pub async fn import_repo(&self, req: &Import<'_>) -> Result<Imported, StoreError> {
+        let (org, name) = (req.org, req.name);
+        if !names::valid_org(org) || !names::valid_repo_name(name) {
+            return Err(StoreError::invalid("invalid_repo_name", format!("invalid repository name {name:?}")));
+        }
+        if req.url.is_some_and(|u| !names::valid_repo_name(u)) {
+            return Err(StoreError::invalid("invalid_url", format!("invalid url form {:?}", req.url)));
+        }
+        if req.repo_id.is_some_and(|id| id.is_empty() || id.len() > REPO_ID_BYTES_MAX || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')) {
+            return Err(StoreError::invalid("invalid_repo_id", format!("a repo id is 1 to {REPO_ID_BYTES_MAX} letters, digits, _ and -, not {:?}", req.repo_id)));
+        }
+        if !names::valid_branch(req.default_branch) {
+            return Err(StoreError::invalid("invalid_branch", format!("invalid default_branch {:?}", req.default_branch)));
+        }
+        let id = match req.repo_id {
+            Some(id) => id.to_string(),
+            None => self.random_id()?,
+        };
+        if !self.registry.lock().expect("the registry lock").begin_import(org, name, req.url, &id) {
+            return Err(StoreError::conflict("repository_exists", format!("{name}, its url form or its id is taken")));
+        }
+        let made = self.make_imported(req, &id).await;
+        let meta = made.as_ref().ok().map(|i| i.meta.clone());
+        self.registry.lock().expect("the registry lock").end(org, name, meta);
+        made
+    }
+
+    async fn make_imported(&self, req: &Import<'_>, id: &str) -> Result<Imported, StoreError> {
+        let tmp = self.layout.tmp().join(format!("{id}.git"));
+        std::fs::create_dir_all(&tmp)?;
+        let result = async {
+            let git = self.engine.init(&tmp, req.default_branch).await?;
+            git.import_stream(req.stream).await.map_err(|e| match e {
+                macrofiche_git::GitError::Failed { stderr, .. } => StoreError::invalid("invalid_stream", format!("fast-import refused the stream: {}", stderr.trim())),
+                e => e.into(),
+            })?;
+            let mut branches = vec![];
+            let mut legacy = 0usize;
+            for (name, oid) in git.refs("refs/").await? {
+                let branch = name.strip_prefix("refs/heads/").or_else(|| name.strip_prefix(repo::EPHEMERAL_PREFIX));
+                let old = name.strip_prefix(repo::LEGACY_PREFIX);
+                match (branch, old) {
+                    (Some(b), None) if names::valid_branch(b) => branches.push((name.clone(), oid.to_string())),
+                    (None, Some(old)) if names::is_sha(old) => legacy += 1,
+                    _ => return Err(StoreError::invalid("invalid_stream", format!("the stream wrote {name}: an import writes branches and legacy ids alone"))),
+                }
+                let is_commit = git.run("cat-file", &["cat-file", "-t", &oid.to_string()], macrofiche_git::RunOpts::read()).await?.ok("cat-file")?;
+                if String::from_utf8_lossy(&is_commit).trim() != "commit" {
+                    return Err(StoreError::invalid("invalid_stream", format!("{name} names no commit")));
+                }
+            }
+            let fsck = git.fsck().await?;
+            if !fsck.ok {
+                return Err(StoreError::invalid("invalid_stream", format!("fsck --strict: {}", fsck.stderr.trim())));
+            }
+            let meta = RepoMeta {
+                repo_id: id.to_string(),
+                repo_name: req.name.into(),
+                org: req.org.into(),
+                default_branch: req.default_branch.into(),
+                created_at_ms: req.created_at_ms,
+                deleted_at_ms: None,
+                url: req.url.map(str::to_string),
+            };
+            repo::write_durably(&tmp.join(registry::META_FILE), &serde_json::to_vec_pretty(&meta).expect("a meta serializes"))?;
+            std::fs::create_dir_all(self.layout.org(req.org))?;
+            registry::rename_noreplace(&tmp, &self.layout.repo(req.org, id))?;
+            Ok::<_, StoreError>(Imported { meta, branches, legacy })
+        }
+        .await;
+        if result.is_err() {
+            let _ = std::fs::remove_dir_all(&tmp);
+        }
+        result
     }
 
     pub fn repos_page(&self, org: &str, after: Option<(i64, &str)>, limit: usize, q: Option<&str>) -> (Vec<RepoMeta>, bool) {
@@ -302,14 +415,16 @@ impl Store {
         self.registry.lock().expect("the registry lock").by_id(org, id).cloned()
     }
 
-    pub fn repo_meta(&self, org: &str, name: &str) -> Option<RepoMeta> {
-        self.registry.lock().expect("the registry lock").by_name(org, name).cloned()
+    /// The repository whose url form is `url`, unless it was deleted.
+    pub fn repo_meta(&self, org: &str, url: &str) -> Option<RepoMeta> {
+        self.registry.lock().expect("the registry lock").by_url(org, url).cloned()
     }
 
-    /// The repository `name` of `org`: one handle per repository while any
-    /// is alive, so its write lock is the only one.
-    pub async fn repo(&self, org: &str, name: &str) -> Result<Arc<RepoHandle>, StoreError> {
-        let meta = self.repo_meta(org, name).ok_or_else(|| StoreError::not_found("repository_not_found", "repository not found"))?;
+    /// The repository of `org` whose url form is `url`, as every
+    /// repo-scoped call names it: one handle per repository while any is
+    /// alive, so its write lock is the only one.
+    pub async fn repo(&self, org: &str, url: &str) -> Result<Arc<RepoHandle>, StoreError> {
+        let meta = self.repo_meta(org, url).ok_or_else(|| StoreError::not_found("repository_not_found", "repository not found"))?;
         self.handle(meta)
     }
 
@@ -343,7 +458,7 @@ impl Store {
         };
         let mut out = Vec::new();
         for (k, meta, written) in due {
-            if self.repo_meta(&meta.org, &meta.repo_name).is_none() {
+            if self.repo_by_id(&meta.org, &meta.repo_id).is_none() {
                 // deleted since it was written
                 continue;
             }
