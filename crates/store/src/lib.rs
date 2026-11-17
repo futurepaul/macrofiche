@@ -42,6 +42,9 @@ pub const PRUNE_EXPIRE: &str = "2.weeks.ago";
 pub const MAINTENANCE_TASKS: &[&str] = &["geometric-repack", "loose-objects", "pack-refs", "commit-graph"];
 
 pub struct Store {
+    /// The state directory's lock, held while this store is open: one
+    /// process at a time serves a state directory.
+    _lock: std::fs::File,
     layout: Layout,
     engine: Engine,
     registry: Mutex<Registry>,
@@ -66,6 +69,30 @@ pub struct Maintained {
 
 fn key(org: &str, id: &str) -> String {
     format!("{org}/{id}")
+}
+
+/// Takes the state directory's lock, exclusively and at once: refused
+/// while another process holds it (it serves there). A POSIX
+/// record lock: held by this process, never by a child it forks (git's
+/// processes), and let go by the kernel however the process ends. It does
+/// not tell two opens in one process apart (only tests make those).
+fn lock_state(path: &Path) -> Result<std::fs::File, StoreError> {
+    use std::os::fd::AsRawFd;
+    let f = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(path)?;
+    // SAFETY: a zeroed `flock` is a valid value; its fields are set below.
+    let mut l: libc::flock = unsafe { std::mem::zeroed() };
+    l.l_type = libc::F_WRLCK as libc::c_short;
+    l.l_whence = libc::SEEK_SET as libc::c_short;
+    // SAFETY: a valid descriptor this function owns, and a valid `flock`.
+    let r = unsafe { libc::fcntl(f.as_raw_fd(), libc::F_SETLK, &l) };
+    if r != 0 {
+        let e = std::io::Error::last_os_error();
+        return Err(match e.raw_os_error() {
+            Some(libc::EAGAIN | libc::EACCES) => StoreError::Unavailable(format!("{} is held: another macrofiche serves this state directory", path.display())),
+            _ => e.into(),
+        });
+    }
+    Ok(f)
 }
 
 /// What a delete did (contract 5.13).
@@ -111,6 +138,10 @@ impl Store {
     /// and everything a killed writer left cleared, before any request.
     pub async fn open(state: PathBuf, settings: Settings) -> Result<(Arc<Store>, Recovery), StoreError> {
         let layout = Layout { state };
+        // before anything is cleared: another process's spools and half-made
+        // repositories are its own, never this one's to sweep
+        std::fs::create_dir_all(&layout.state)?;
+        let lock = lock_state(&layout.lock())?;
         let mut rec = Recovery::default();
         for d in [layout.tmp(), layout.spool()] {
             if d.exists() {
@@ -136,6 +167,7 @@ impl Store {
         let (registry, strays) = Registry::load(&layout)?;
         rec.strays = strays.len();
         let store = Arc::new(Store {
+            _lock: lock,
             layout,
             engine,
             registry: Mutex::new(Registry::default()),

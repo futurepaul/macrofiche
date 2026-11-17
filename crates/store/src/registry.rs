@@ -36,6 +36,10 @@ impl Layout {
     pub fn spool(&self) -> PathBuf {
         self.state.join("spool")
     }
+    /// Held while a process serves the state directory.
+    pub fn lock(&self) -> PathBuf {
+        self.state.join("macrofiche.lock")
+    }
     /// An empty directory the engine's version check runs jailed in.
     pub fn scratch(&self) -> PathBuf {
         self.state.join("engine-check")
