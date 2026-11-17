@@ -10,6 +10,7 @@ pub mod lru;
 pub mod recovery;
 pub mod registry;
 pub mod repo;
+pub mod stream;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -353,6 +354,9 @@ impl Store {
     }
 
     async fn make_imported(&self, req: &Import<'_>, id: &str) -> Result<Imported, StoreError> {
+        // what the stream writes, read before git sees it: names git takes
+        // that an import must not (a root ref, `shallow`) are refused here
+        stream::check(std::fs::File::open(req.stream)?).map_err(|r| StoreError::invalid("invalid_stream", format!("line {}: {}", r.line, r.why)))?;
         let tmp = self.layout.tmp().join(format!("{id}.git"));
         std::fs::create_dir_all(&tmp)?;
         let result = async {
@@ -393,6 +397,18 @@ impl Store {
                 if String::from_utf8_lossy(&is_commit).trim() != "commit" {
                     return Err(refused(format!("{name} names no commit")));
                 }
+            }
+            // and what git left, as a backstop: nothing beside what an
+            // initialized repository and its objects and refs are
+            for e in std::fs::read_dir(&tmp)? {
+                let name = e?.file_name();
+                let name = name.to_string_lossy();
+                if !matches!(name.as_ref(), "HEAD" | "config" | "objects" | "refs" | "packed-refs" | "macrofiche") {
+                    return Err(refused(format!("the stream left {name} in the repository: an import writes branches and legacy ids alone")));
+                }
+            }
+            if std::fs::read_dir(tmp.join("objects/info"))?.next().is_some() {
+                return Err(refused("the stream left files in objects/info".into()));
             }
             let head = git.run("symbolic-ref", &["symbolic-ref", "HEAD"], macrofiche_git::RunOpts::read()).await?.ok("symbolic-ref")?;
             if String::from_utf8_lossy(&head).trim() != format!("refs/heads/{}", req.default_branch) {

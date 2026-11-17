@@ -209,18 +209,19 @@ async fn a_real_commit_id_is_never_an_alias() {
 }
 
 // Goal: an import writes no ref outside its allowlist, a root ref
-// (`ORIG_HEAD`, which a `refs/` listing never shows) included, and its
-// HEAD is its default branch. Method: a stream that also resets
-// ORIG_HEAD; a stream that points HEAD elsewhere is not one fast-import
-// takes, so HEAD is checked as made.
+// (`ORIG_HEAD`, which a `refs/` listing never shows) and `shallow` (which
+// hides history from every walk, and which fsck passes) included. Method:
+// a stream that also resets each.
 #[tokio::test]
 async fn an_import_refuses_a_root_ref() {
     let root = macrofiche_testkit::scratch("import-root-ref");
     let (store, _) = open(&root).await.unwrap();
-    let s = write_stream(&root, "orig", &stream("reset ORIG_HEAD\nfrom :4\n\n", true));
-    let e = store.import_repo(&req("orig", Some("orig-url"), None, &s)).await.unwrap_err();
-    assert!(matches!(e, StoreError::Invalid { code: "invalid_stream", .. }), "ORIG_HEAD: {e:?}");
-    assert!(store.repo_meta(ORG, "orig-url").is_none(), "nothing made");
+    for (name, extra) in [("orig", "reset ORIG_HEAD\nfrom :4\n\n"), ("shallow", "reset shallow\nfrom :4\n\n")] {
+        let s = write_stream(&root, name, &stream(extra, true));
+        let e = store.import_repo(&req(name, Some(&format!("{name}-url")), None, &s)).await.unwrap_err();
+        assert!(matches!(e, StoreError::Invalid { code: "invalid_stream", .. }), "{name}: {e:?}");
+        assert!(store.repo_meta(ORG, &format!("{name}-url")).is_none(), "{name}: nothing made");
+    }
     assert_eq!(std::fs::read_dir(root.join("state/tmp")).unwrap().count(), 0, "no half-made repository is left");
 }
 

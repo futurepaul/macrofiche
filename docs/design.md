@@ -480,10 +480,17 @@ agent's sync) keep what they knew the repository by:
   and is answered with git's ids from then on. `transfer.hideRefs` keeps
   them out of smart HTTP.
 
-The import runs `git fast-import --done` jailed, under the maintenance
-limits, into a repository made in `tmp/`; it takes branches (`refs/heads/`
-and the ephemeral namespace) and legacy ids, each a commit, and any
-other ref (a root ref such as `ORIG_HEAD` too), a legacy id that is an
+The stream is read before git sees it (`crates/store/src/stream.rs`):
+each command, its data blocks skipped by count or delimiter, and each
+ref a `commit` or `reset` names, against an allowlist; git takes names
+an import must not write (a root ref such as `ORIG_HEAD`, or `shallow`,
+which hides history from every walk and passes fsck), so they are
+refused there, and so are tags, `option`, every `feature` but `done`,
+and the commands that read back. Then the import runs `git fast-import
+--done` jailed, under the maintenance limits, into a repository made in
+`tmp/`, and checks what it made: branches (`refs/heads/` and the
+ephemeral namespace) and legacy ids alone, each a commit; nothing in the
+repository beside its objects, refs and config; and any other ref, a legacy id that is an
 object the repository holds (an alias is only for an id that is not: a
 real commit's id is always that commit, for a read as for a write's
 expected head), a HEAD that is not the default branch, a stream cut
