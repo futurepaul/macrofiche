@@ -371,6 +371,13 @@ owns it) and is checked where input arrives.
 
 ## Recovery and maintenance
 
+- **One process per state directory.** `serve` holds a POSIX write
+  lock on `<state_dir>/macrofiche.lock` from before boot's sweep below:
+  a second macrofiche on the same state directory is refused at once,
+  before it could clear the first one's spools (its uploads in flight)
+  and half-made repositories. The lock is the process's, never inherited
+  by the git processes it forks, and the kernel lets go of it however
+  the process ends.
 - **At boot, before serving** (macrofiche is the only writer, so no
   writer of its own can be alive): every `*.lock` under each repository
   (refs, `packed-refs`, `config`, `HEAD`, `shallow`, the commit-graph and
