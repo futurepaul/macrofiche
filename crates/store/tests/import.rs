@@ -178,3 +178,49 @@ async fn an_import_refuses_what_it_does_not_take() {
         assert!(matches!(e, StoreError::Invalid { .. }), "{url:?} {id:?}: {e:?}");
     }
 }
+
+// Goal: a legacy id is an alias only for an id that is no commit here: a
+// stream that names one of its own commits' real ids as another's legacy
+// id is refused, and a write expecting a real commit that is not the tip
+// is refused (409) whatever legacy ref names it. Method: a stream aliasing
+// the first commit's real id to the second, then a write expecting the
+// first while main holds the second, through a stream that only aliases.
+#[tokio::test]
+async fn a_real_commit_id_is_never_an_alias() {
+    let root = macrofiche_testkit::scratch("import-alias");
+    let (store, _) = open(&root).await.unwrap();
+    // the first commit's real id, as git makes it from the stream
+    let clean = write_stream(&root, "clean", &stream("", true));
+    let made = store.import_repo(&req("clean", Some("clean-url"), None, &clean)).await.unwrap();
+    let r = store.repo(ORG, "clean-url").await.unwrap();
+    let first = r.branch("live", false).await.unwrap().unwrap();
+    let main = r.branch("main", false).await.unwrap().unwrap();
+    assert_eq!(made.legacy, 2);
+    // a stream that names that real id as the second commit's legacy id
+    let aliased = write_stream(&root, "aliased", &stream(&format!("reset refs/macrofiche/legacy/{first}\nfrom :4\n\n"), true));
+    let e = store.import_repo(&req("aliased", Some("aliased-url"), None, &aliased)).await.unwrap_err();
+    assert!(matches!(e, StoreError::Invalid { code: "invalid_stream", .. }), "an alias that is a real commit's id: {e:?}");
+    assert!(store.repo_meta(ORG, "aliased-url").is_none(), "nothing made");
+    // and a write expecting a real commit that is not the tip is a 409,
+    // even with a legacy ref of that name (written past the import)
+    r.git.update_refs(&[macrofiche_git::RefOp::Create { name: format!("refs/macrofiche/legacy/{first}"), new: main }]).await.unwrap().unwrap();
+    let stale = pack(&r, &root, Expected::At(first.to_string()), "stale.txt", b"x").await;
+    assert!(matches!(stale, CommitOutcome::Moved { current: Some(c) } if c == main), "a write on a real, older commit is refused");
+}
+
+// Goal: an import writes no ref outside its allowlist, a root ref
+// (`ORIG_HEAD`, which a `refs/` listing never shows) included, and its
+// HEAD is its default branch. Method: a stream that also resets
+// ORIG_HEAD; a stream that points HEAD elsewhere is not one fast-import
+// takes, so HEAD is checked as made.
+#[tokio::test]
+async fn an_import_refuses_a_root_ref() {
+    let root = macrofiche_testkit::scratch("import-root-ref");
+    let (store, _) = open(&root).await.unwrap();
+    let s = write_stream(&root, "orig", &stream("reset ORIG_HEAD\nfrom :4\n\n", true));
+    let e = store.import_repo(&req("orig", Some("orig-url"), None, &s)).await.unwrap_err();
+    assert!(matches!(e, StoreError::Invalid { code: "invalid_stream", .. }), "ORIG_HEAD: {e:?}");
+    assert!(store.repo_meta(ORG, "orig-url").is_none(), "nothing made");
+    assert_eq!(std::fs::read_dir(root.join("state/tmp")).unwrap().count(), 0, "no half-made repository is left");
+}
+

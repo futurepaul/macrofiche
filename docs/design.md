@@ -483,8 +483,11 @@ agent's sync) keep what they knew the repository by:
 The import runs `git fast-import --done` jailed, under the maintenance
 limits, into a repository made in `tmp/`; it takes branches (`refs/heads/`
 and the ephemeral namespace) and legacy ids, each a commit, and any
-other ref, a stream cut before `done`, or an `fsck --strict` fault is
-refused with nothing kept. Then it is renamed into place whole, as a
+other ref (a root ref such as `ORIG_HEAD` too), a legacy id that is an
+object the repository holds (an alias is only for an id that is not: a
+real commit's id is always that commit, for a read as for a write's
+expected head), a HEAD that is not the default branch, a stream cut
+before `done`, or an `fsck --strict` fault is refused with nothing kept. Then it is renamed into place whole, as a
 create is; its last-commit index is rebuilt as a commit macrofiche did
 not write is (The last-commit index).
 

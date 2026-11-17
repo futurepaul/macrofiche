@@ -363,18 +363,40 @@ impl Store {
             })?;
             let mut branches = vec![];
             let mut legacy = 0usize;
-            for (name, oid) in git.refs("refs/").await? {
+            let refused = |why: String| StoreError::invalid("invalid_stream", why);
+            // every ref, the root refs too (`ORIG_HEAD` and the like, which
+            // a listing of `refs/` never shows); HEAD alone is checked below
+            let listed = git.run("for-each-ref", &["for-each-ref", "--include-root-refs", "--format=%(objectname) %(refname)"], macrofiche_git::RunOpts { stdout_max: 64 << 20, ..macrofiche_git::RunOpts::read() }).await?.ok("for-each-ref")?;
+            let all = macrofiche_git::parse::refs(&listed, macrofiche_git::linux::plumbing::REFS_MAX).map_err(|e| StoreError::Internal(e.to_string()))?;
+            let git = &git;
+            let cat = |what: String| async move { git.run("cat-file", &["cat-file", "-t", &what], macrofiche_git::RunOpts::read()).await };
+            for (name, oid) in all {
+                if name == "HEAD" {
+                    continue;
+                }
                 let branch = name.strip_prefix("refs/heads/").or_else(|| name.strip_prefix(repo::EPHEMERAL_PREFIX));
                 let old = name.strip_prefix(repo::LEGACY_PREFIX);
                 match (branch, old) {
                     (Some(b), None) if names::valid_branch(b) => branches.push((name.clone(), oid.to_string())),
-                    (None, Some(old)) if names::is_sha(old) => legacy += 1,
-                    _ => return Err(StoreError::invalid("invalid_stream", format!("the stream wrote {name}: an import writes branches and legacy ids alone"))),
+                    (None, Some(old)) if names::is_sha(old) => {
+                        // an alias is for an id that is no object here: one
+                        // naming a real commit would let a write prepared
+                        // against that commit pass for another's
+                        if cat(old.to_string()).await?.success() {
+                            return Err(refused(format!("{name} names an id this repository holds as an object: a legacy id is only an id it does not")));
+                        }
+                        legacy += 1;
+                    }
+                    _ => return Err(refused(format!("the stream wrote {name}: an import writes branches and legacy ids alone"))),
                 }
-                let is_commit = git.run("cat-file", &["cat-file", "-t", &oid.to_string()], macrofiche_git::RunOpts::read()).await?.ok("cat-file")?;
+                let is_commit = cat(oid.to_string()).await?.ok("cat-file")?;
                 if String::from_utf8_lossy(&is_commit).trim() != "commit" {
-                    return Err(StoreError::invalid("invalid_stream", format!("{name} names no commit")));
+                    return Err(refused(format!("{name} names no commit")));
                 }
+            }
+            let head = git.run("symbolic-ref", &["symbolic-ref", "HEAD"], macrofiche_git::RunOpts::read()).await?.ok("symbolic-ref")?;
+            if String::from_utf8_lossy(&head).trim() != format!("refs/heads/{}", req.default_branch) {
+                return Err(refused(format!("HEAD is {}, not the default branch", String::from_utf8_lossy(&head).trim())));
             }
             let fsck = git.fsck().await?;
             if !fsck.ok {

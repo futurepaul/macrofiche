@@ -369,9 +369,17 @@ impl RepoHandle {
 
     /// Whether `tip` is the commit a write expected (`x`, a sha): itself,
     /// or the commit a legacy id names, as a client of the store it was
-    /// imported from holds it.
+    /// imported from holds it. As `resolve` reads one: an id that is a
+    /// commit here is that commit, never an alias, so a write prepared
+    /// against an older commit is refused whatever legacy ref is named so.
     async fn expects(&self, x: &str, tip: Oid) -> Result<bool, StoreError> {
-        Ok(tip.to_string() == x || self.legacy(x).await? == Some(tip))
+        if tip.to_string() == x {
+            return Ok(true);
+        }
+        if !names::is_sha(x) || self.info(&format!("{x}^{{commit}}")).await?.is_some() {
+            return Ok(false);
+        }
+        Ok(self.legacy(x).await? == Some(tip))
     }
 
     /// A commit, read and cached.
